@@ -1,3 +1,4 @@
+import { useState } from "react";
 import "../styles/hero.css";
 import image1 from "../assets/imageSlider1.jpg";
 import image2 from "../assets/imageSlider2.jpg";
