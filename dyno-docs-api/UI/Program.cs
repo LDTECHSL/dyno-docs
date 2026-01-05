@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using UI.Filters;
 using UI.Middlewares;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -51,7 +52,9 @@ builder.Services.AddSwaggerGen(c =>
         }
     });
 
-    });
+    // Support for IFormFile in Swagger
+    c.OperationFilter<FileUploadOperationFilter>();
+});
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
