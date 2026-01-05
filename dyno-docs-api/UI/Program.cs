@@ -22,6 +22,9 @@ builder.Services
     .AddApplication()
     .AddInfrastructure(builder.Configuration);
 
+// Controllers
+builder.Services.AddControllers();
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -47,7 +50,8 @@ builder.Services.AddSwaggerGen(c =>
             Array.Empty<string>()
         }
     });
-});
+
+    });
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -64,7 +68,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization();
-builder.Services.AddControllers();
 
 // Build app (services must not be modified after this point)
 var app = builder.Build();
@@ -78,6 +81,7 @@ using (var scope = app.Services.CreateScope())
 
 // Configure middleware pipeline
 app.UseMiddleware<ErrorHandlerMiddleware>();
+app.UseMiddleware<TenantMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {
@@ -90,7 +94,9 @@ app.UseHttpsRedirection();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
+
+
+// Map Controllers
 app.MapControllers();
 
 app.Run();
-
