@@ -10,6 +10,7 @@ import { useState, useRef, useEffect } from "react";
 import { downloadSampleExcel, uploadAgencyData, getUploadDataSet, deleteData, createPlace, updatePlace } from "../services/agency-data-api";
 import { showError, showSuccess } from "../components/Toast";
 import excelImg from "../assets/xlsx.png";
+<<<<<<< HEAD
 import trashImg from "../assets/trash.png";
 
 interface PlaceData {
@@ -30,6 +31,8 @@ interface PlaceData {
     lastModifiedAt?: string;
     lastModifiedBy?: string;
 }
+=======
+>>>>>>> 83c196e318a164a7bf7f4a586ced69262ab89a0d
 
 export default function AgencyData() {
     const DD_TOKEN = sessionStorage.getItem("dd_token") || "";
@@ -621,6 +624,7 @@ export default function AgencyData() {
                                 Cancel
                             </button>
                             <button
+<<<<<<< HEAD
                                 type="button"
                                 className="btn btn--success"
                                 onClick={() => {
@@ -1232,6 +1236,18 @@ export default function AgencyData() {
                             >
                                 {isSubmitting ? 'Updating...' : 'Update Place'}
                             </button>
+=======
+                            type="button"
+                            className="btn btn--success"
+                            onClick={() => {
+                                handleDownloadSampleExcel();
+                                setDownloadModalOpen(false);
+                            }}
+                        >
+                            <DownloadRoundedIcon fontSize="small" />
+                            Download
+                        </button>
+>>>>>>> 83c196e318a164a7bf7f4a586ced69262ab89a0d
                         </div>
                     </div>
                 </div>
