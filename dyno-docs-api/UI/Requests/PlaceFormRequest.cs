@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Http;
 using System.ComponentModel.DataAnnotations;
 
 namespace UI.Requests;
@@ -32,4 +32,3 @@ public class PlaceFormRequest
     public IFormFile? Image4 { get; set; }
     public IFormFile? Image5 { get; set; }
 }
-
