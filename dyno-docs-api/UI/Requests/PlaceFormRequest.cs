@@ -32,3 +32,4 @@ public class PlaceFormRequest
     public IFormFile? Image4 { get; set; }
     public IFormFile? Image5 { get; set; }
 }
+
