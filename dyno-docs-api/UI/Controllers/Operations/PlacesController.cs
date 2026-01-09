@@ -26,7 +26,8 @@ public class PlacesController : ControllerBase
     [Consumes("multipart/form-data")]
     [ProducesResponseType(typeof(Result), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<Result>> Create([FromForm] PlaceFormRequest request, CancellationToken cancellationToken)
+    public async Task<ActionResult<Result>> Create([FromForm] PlaceFormRequest request,
+        CancellationToken cancellationToken)
     {
         var appRequest = await MapToPlaceRequest(request);
 
@@ -73,13 +74,21 @@ public class PlacesController : ControllerBase
     /// Update a place
     /// </summary>
     [HttpPut("{id}")]
-    [Consumes("multipart/form-data")]
     [ProducesResponseType(typeof(Result), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(Result), StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult<Result>> Update([FromRoute] Guid id, [FromForm] PlaceFormRequest request, CancellationToken cancellationToken)
+    public async Task<ActionResult<Result>> Update([FromRoute] Guid id, [FromBody] PlaceRequestUpdate request,
+        CancellationToken cancellationToken)
     {
-        var appRequest = await MapToPlaceRequest(request);
-
+        var appRequest = new PlaceRequest
+        {
+            Name = request.Name,
+            AverageVisitDuration = request.AverageVisitDuration,
+            Description = request.Description,
+            FunFact = request.FunFact,
+            District = request.District,
+            City = request.City
+        };
+        
         var result = await _placeService.UpdateAsync(id, appRequest, cancellationToken);
 
         if (result.Succeeded)
@@ -150,12 +159,14 @@ public class PlacesController : ControllerBase
         }
 
         var fileBytes = System.IO.File.ReadAllBytes(templatePath);
-        return File(fileBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "places_template.xlsx");
+        return File(fileBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "places_template.xlsx");
     }
 
     private static async Task<PlaceRequest> MapToPlaceRequest(PlaceFormRequest form)
     {
-        byte[]? ToBytes(IFormFile? file) => file == null || file.Length == 0 ? null : ReadAllBytes(file).GetAwaiter().GetResult();
+        byte[]? ToBytes(IFormFile? file) =>
+            file == null || file.Length == 0 ? null : ReadAllBytes(file).GetAwaiter().GetResult();
 
         async Task<byte[]?> ReadAllBytes(IFormFile? file)
         {
