@@ -1,3 +1,3 @@
 window.env = {
-  API_URL: "https://localhost:7165/api",
+  API_URL: "https://dynodocsapi.runasp.net/api",
 };
