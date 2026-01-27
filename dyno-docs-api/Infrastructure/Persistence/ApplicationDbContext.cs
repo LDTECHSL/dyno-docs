@@ -23,7 +23,6 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     #region DbSets
 
     public DbSet<Place> Places => Set<Place>();
-    public DbSet<PricingPlan> PricingPlan => Set<PricingPlan>();
 
     #endregion
 
