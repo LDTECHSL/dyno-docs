@@ -25,7 +25,8 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<Place> Places => Set<Place>();
     public DbSet<PricingPlan> PricingPlan => Set<PricingPlan>();
     public DbSet<Partnership> Partnership => Set<Partnership>();
-
+    public DbSet<Template> Template => Set<Template>();
+    
     #endregion
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -44,6 +45,10 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
                 method.Invoke(this, new object[] { modelBuilder });
             }
         }
+        
+        modelBuilder.Entity<Template>()
+            .Property(t => t.TemplateDesign)
+            .HasColumnType("LONGTEXT");
     }
 
     private void ApplyTenantQueryFilter<TEntity>(ModelBuilder modelBuilder) where TEntity : BaseEntity
