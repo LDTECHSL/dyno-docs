@@ -6,23 +6,29 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Infrastructure.Migrations
 {
     /// <inheritdoc />
-    public partial class addpartnershiptable : Migration
+    public partial class AddPromoCodeTable : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
-                name: "Partnership",
+                name: "PromoCode",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "char(36)", nullable: false, collation: "ascii_general_ci"),
-                    Name = table.Column<string>(type: "varchar(255)", maxLength: 255, nullable: true)
+                    Code = table.Column<string>(type: "varchar(50)", maxLength: 50, nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4"),
-                    Description = table.Column<string>(type: "varchar(500)", maxLength: 500, nullable: true)
+                    Description = table.Column<string>(type: "varchar(255)", maxLength: 255, nullable: true)
                         .Annotation("MySql:CharSet", "utf8mb4"),
-                    PartnershipType = table.Column<int>(type: "int", nullable: false),
-                    Images = table.Column<string>(type: "longtext", nullable: true)
-                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    DiscountPercentage = table.Column<decimal>(type: "decimal(65,30)", nullable: false),
+                    DiscountAmount = table.Column<decimal>(type: "decimal(65,30)", nullable: true),
+                    MinimumPurchaseAmount = table.Column<decimal>(type: "decimal(65,30)", nullable: true),
+                    MaxDiscountAmount = table.Column<decimal>(type: "decimal(65,30)", nullable: true),
+                    ValidFrom = table.Column<DateTime>(type: "datetime(6)", nullable: false),
+                    ValidTo = table.Column<DateTime>(type: "datetime(6)", nullable: false),
+                    MaxUsageCount = table.Column<int>(type: "int", nullable: true),
+                    CurrentUsageCount = table.Column<int>(type: "int", nullable: false),
+                    IsActive = table.Column<bool>(type: "tinyint(1)", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "datetime(6)", nullable: false),
                     CreatedBy = table.Column<string>(type: "longtext", nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4"),
@@ -33,7 +39,7 @@ namespace Infrastructure.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Partnership", x => x.Id);
+                    table.PrimaryKey("PK_PromoCode", x => x.Id);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
         }
@@ -42,7 +48,7 @@ namespace Infrastructure.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
-                name: "Partnership");
+                name: "PromoCode");
         }
     }
 }
