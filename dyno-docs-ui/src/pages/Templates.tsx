@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
+import { useNavigate } from "react-router-dom";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import WorkspacePremiumRoundedIcon from "@mui/icons-material/WorkspacePremiumRounded";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
+import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import JSON5 from "json5";
 import Navbar from "../layouts/Navbar";
 import "../styles/templates.css";
@@ -409,6 +411,7 @@ const getAssignmentDesign = (template: TemplateCardModel) => {
 };
 
 export default function Templates() {
+  const navigate = useNavigate();
   const [templates, setTemplates] = useState<TemplateCardModel[]>([]);
   const [filter, setFilter] = useState<TemplateFilter>("all");
   const [searchTerm, setSearchTerm] = useState("");
@@ -675,6 +678,10 @@ export default function Templates() {
     setPreviewPlaceholders(DEFAULT_PLACEHOLDERS);
   };
 
+  const handleCustomizeTemplate = (template: TemplateCardModel) => {  
+    navigate("/templates/customize", { state: { template } });
+  };
+
   const handleClosePreview = () => {
     setPreviewTemplate(null);
   };
@@ -884,6 +891,7 @@ export default function Templates() {
             error={myTemplatesError}
             onClose={handleCloseMyTemplatesModal}
             onPreviewAssigned={(template) => handleCardPreview(template, true)}
+            onCustomize={handleCustomizeTemplate}
             onReload={handleReloadMyTemplates}
             onUnassignRequest={handleUnassignTemplateRequest}
             isUnassigning={isUnassigning}
@@ -934,6 +942,7 @@ type TemplateCardProps = {
   onAddRequest?: (template: TemplateCardModel) => void;
   onPurchase?: (template: TemplateCardModel) => void;
   onPreview: (template: TemplateCardModel) => void;
+  onEditRequest?: (template: TemplateCardModel) => void;
   isAssigning?: boolean;
   variant?: "marketplace" | "assigned";
   onUnassignRequest?: (template: TemplateCardModel) => void;
@@ -946,6 +955,7 @@ function TemplateCard({
   onAddRequest,
   onPurchase,
   onPreview,
+  onEditRequest,
   isAssigning = false,
   variant = "marketplace",
   onUnassignRequest,
@@ -996,6 +1006,18 @@ function TemplateCard({
     onUnassignRequest(template);
   };
 
+  const handleEditClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    if (!isAssignedCard) {
+      return;
+    }
+    if (onEditRequest) {
+      onEditRequest(template);
+      return;
+    }
+    onPreview(template);
+  };
+
   return (
     <article
       className={`template-card ${isPaid ? "template-card--premium" : "template-card--free"}`}
@@ -1019,6 +1041,19 @@ function TemplateCard({
             <WorkspacePremiumRoundedIcon fontSize="small" />
           </span>
         )}
+
+        {isAssignedCard && (
+          <button
+            type="button"
+            className="template-card__overlay-action"
+            onClick={handleEditClick}
+            aria-label={`Customize ${name}`}
+            data-tooltip="Customize template"
+          >
+            <EditRoundedIcon fontSize="small" />
+            <span>Customize</span>
+          </button>
+        )}
       </div>
 
       <div className="template-card__content">
@@ -1026,35 +1061,37 @@ function TemplateCard({
       </div>
 
       <div className="template-card__actions">
-        <button
-          type="button"
-          className="btn btn--orange"
-          onClick={handleAddClick}
-          disabled={!isAssignedCard && !isPaid && isAssigning}
-        >
-          {isAssignedCard ? (
-            <>
-              <EyeIcon size={16} />
-              View Template
-            </>
-          ) : (
-            <>
-              {isPaid ? <MonetizationOn fontSize="small" /> : <AddRoundedIcon fontSize="small" />}
-              {isPaid ? "Purchase" : isAssigning ? "Assigning..." : "Add Template"}
-            </>
-          )}
-        </button>
-
-        {isAssignedCard && onUnassignRequest && (
+        <div className="template-card__action-buttons">
           <button
             type="button"
-            className="btn btn--ghost"
-            onClick={handleUnassignClick}
-            disabled={isUnassigningThisTemplate}
+            className="btn btn--orange"
+            onClick={handleAddClick}
+            disabled={!isAssignedCard && !isPaid && isAssigning}
           >
-            {isUnassigningThisTemplate ? "Removing..." : "Unassign"}
+            {isAssignedCard ? (
+              <>
+                <EyeIcon size={16} />
+                View Template
+              </>
+            ) : (
+              <>
+                {isPaid ? <MonetizationOn fontSize="small" /> : <AddRoundedIcon fontSize="small" />}
+                {isPaid ? "Purchase" : isAssigning ? "Assigning..." : "Add Template"}
+              </>
+            )}
           </button>
-        )}
+
+          {isAssignedCard && onUnassignRequest && (
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={handleUnassignClick}
+              disabled={isUnassigningThisTemplate}
+            >
+              {isUnassigningThisTemplate ? "Removing..." : "Unassign"}
+            </button>
+          )}
+        </div>
 
         <div className="template-card__badges">
           {!(isAssignedCard && !isPaid) && (
@@ -1121,6 +1158,7 @@ type MyTemplatesModalProps = {
   error: string | null;
   onClose: () => void;
   onPreviewAssigned: (template: TemplateCardModel) => void;
+  onCustomize: (template: TemplateCardModel) => void;
   onReload: () => void;
   onUnassignRequest: (template: TemplateCardModel) => void;
   isUnassigning: boolean;
@@ -1133,6 +1171,7 @@ function MyTemplatesModal({
   error,
   onClose,
   onPreviewAssigned,
+  onCustomize,
   onReload,
   onUnassignRequest,
   isUnassigning,
@@ -1190,6 +1229,7 @@ function MyTemplatesModal({
                   key={`my-${template.id}`}
                   template={template}
                   onPreview={onPreviewAssigned}
+                  onEditRequest={onCustomize}
                   onUnassignRequest={onUnassignRequest}
                   isUnassigning={isUnassigning}
                   unassigningTemplateId={unassigningTemplateId}
