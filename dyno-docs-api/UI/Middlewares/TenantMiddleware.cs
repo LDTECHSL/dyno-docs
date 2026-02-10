@@ -6,9 +6,6 @@ public class TenantMiddleware
 {
     private readonly RequestDelegate _next;
 
-    // Hardcoded fallback for Phase 1 (before login is implemented)
-    private static readonly Guid HardcodedTenantId = Guid.Parse("00000000-0000-0000-0000-000000000001");
-
     public TenantMiddleware(RequestDelegate next)
     {
         _next = next;
@@ -26,8 +23,7 @@ public class TenantMiddleware
         }
         else
         {
-            // Fallback to hardcoded tenant for Phase 1
-            tenantId = HardcodedTenantId;
+            throw new AccessViolationException("TenantId claim is missing or invalid in the JWT token.");
         }
 
         // Store in HttpContext.Items for downstream access
@@ -36,4 +32,3 @@ public class TenantMiddleware
         await _next(context);
     }
 }
-
