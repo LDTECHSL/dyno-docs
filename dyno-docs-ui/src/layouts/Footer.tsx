@@ -5,11 +5,8 @@ import {
   MapPin,
   Mail,
   Phone,
-  Facebook,
-  Instagram,
-  Linkedin,
-  MessageCircle,
 } from "lucide-react";
+import { InstagramOutlined, LinkedinOutlined, TikTokOutlined, WhatsAppOutlined } from "@ant-design/icons";
 
 export default function Footer() {
   return (
@@ -17,7 +14,7 @@ export default function Footer() {
 
       <div className="footer-top">
 
-        {/* Column 1 — Logo + Contact */}
+        {/* Column 1*/}
         <div className="footer-col footer-brand">
           <img className="footer-logo" src={logo} alt="DynoDocs" />
 
@@ -39,7 +36,7 @@ export default function Footer() {
           </div>
         </div>
 
-        {/* Column 2 — Pages */}
+        {/* Column 2*/}
         <div className="footer-col">
           <h3>Pages</h3>
           <ul>
@@ -50,7 +47,7 @@ export default function Footer() {
           </ul>
         </div>
 
-        {/* Column 3 — Support */}
+        {/* Column 3*/}
         <div className="footer-col">
           <h3>Support</h3>
           <ul>
@@ -59,14 +56,14 @@ export default function Footer() {
           </ul>
         </div>
 
-        {/* Column 4 — Social Media */}
+        {/* Column 4*/}
         <div className="footer-col">
           <h3>Social Media</h3>
           <ul>
-            <li><Facebook size={18} className="icon" /> Facebook</li>
-            <li><MessageCircle size={18} className="icon" /> WhatsApp</li>
-            <li><Instagram size={18} className="icon" /> Instagram</li>
-            <li><Linkedin size={18} className="icon" /> LinkedIn</li>
+            <li><TikTokOutlined size={18} className="icon" /> TikTok</li>
+            <li><WhatsAppOutlined size={18} className="icon" /> WhatsApp</li>
+            <li><InstagramOutlined size={18} className="icon" /> Instagram</li>
+            <li><LinkedinOutlined size={18} className="icon" /> LinkedIn</li>
           </ul>
         </div>
 
@@ -74,8 +71,9 @@ export default function Footer() {
 
       <hr className="footer-divider" />
 
+      {/* Footer Bottom */}
       <p className="footer-bottom">
-        © 2025 DynoDocs. All Rights Reserved. | Design and Developed by Group Y3–11
+        © {new Date().getFullYear()} DynoDocs. All Rights Reserved. | Design and Developed by Group Y3–11
       </p>
     </footer>
   );
