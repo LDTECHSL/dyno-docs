@@ -180,3 +180,40 @@ export default function Terms() {
           <h2>12. Account Termination</h2>
           <p>We may suspend or terminate accounts if:</p>
           <ul>
+            <li>Terms are violated</li>
+            <li>Fraudulent activity is detected</li>
+            <li>Required by law</li>
+          </ul>
+          <p>Users may request account deletion by contacting support.</p>
+        </section>
+
+        <section className="privacy-section">
+          <h2>13. Privacy</h2>
+          <p>Use of DynoDocs is also governed by our Privacy Policy.</p>
+          <p>Please review our Privacy Policy for information about data handling.</p>
+        </section>
+
+        <section className="privacy-section">
+          <h2>14. Governing Law</h2>
+          <p>These Terms shall be governed by and interpreted under the laws of Sri Lanka.</p>
+          <p>Any disputes shall be subject to the exclusive jurisdiction of the courts of Sri Lanka.</p>
+        </section>
+
+        <section className="privacy-section">
+          <h2>15. Changes to Terms</h2>
+          <p>We reserve the right to modify these Terms at any time.</p>
+          <p>Updated versions will be posted on this page with a revised effective date.</p>
+          <p>Continued use of DynoDocs constitutes acceptance of changes.</p>
+        </section>
+
+        <section className="privacy-section">
+          <h2>16. Contact Information</h2>
+          <p>DynoDocs</p>
+          <p>Sri Lanka</p>
+          <p>Email: <a href="mailto:dynodocs06@gmail.com">dynodocs06@gmail.com</a></p>
+        </section>
+      </main>
+      <Footer />
+    </div>
+  );
+}
