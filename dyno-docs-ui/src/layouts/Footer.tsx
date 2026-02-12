@@ -7,8 +7,12 @@ import {
   Phone,
 } from "lucide-react";
 import { InstagramOutlined, LinkedinOutlined, TikTokOutlined, WhatsAppOutlined } from "@ant-design/icons";
+import { useNavigate } from "react-router-dom";
 
 export default function Footer() {
+
+  const navigate = useNavigate();
+
   return (
     <footer className="footer-container">
 
@@ -40,10 +44,10 @@ export default function Footer() {
         <div className="footer-col">
           <h3>Pages</h3>
           <ul>
-            <li>Documentation</li>
-            <li>Pricing</li>
-            <li>About Us</li>
-            <li>Contact Us</li>
+            <li onClick={() => navigate("/documentation")}>Documentation</li>
+            <li onClick={() => navigate("/pricing")}>Pricing</li>
+            <li onClick={() => navigate("/about")}>About Us</li>
+            <li onClick={() => navigate("/contact")}>Contact Us</li>
           </ul>
         </div>
 
@@ -51,8 +55,8 @@ export default function Footer() {
         <div className="footer-col">
           <h3>Support</h3>
           <ul>
-            <li>Privacy Policy</li>
-            <li>Terms & Conditions</li>
+            <li onClick={() => navigate("/privacy-policy")}>Privacy Policy</li>
+            <li onClick={() => navigate("/terms-and-conditions")}>Terms & Conditions</li>
           </ul>
         </div>
 
@@ -60,10 +64,10 @@ export default function Footer() {
         <div className="footer-col">
           <h3>Social Media</h3>
           <ul>
-            <li><TikTokOutlined size={18} className="icon" /> TikTok</li>
-            <li><WhatsAppOutlined size={18} className="icon" /> WhatsApp</li>
-            <li><InstagramOutlined size={18} className="icon" /> Instagram</li>
-            <li><LinkedinOutlined size={18} className="icon" /> LinkedIn</li>
+            <li onClick={() => window.open("https://www.tiktok.com/@dyno5878?_r=1&_t=ZS-93pvFnfpf1M", "_blank")}><TikTokOutlined size={18} className="icon" /> TikTok</li>
+            <li onClick={() => window.open("https://wa.me/+94775353762?text=Hello%20DynoDocs", "_blank")}><WhatsAppOutlined size={18} className="icon" /> WhatsApp</li>
+            <li onClick={() => window.open("https://www.instagram.com/dynodocs06?igsh=eWplcDV0Y2JtcjAz", "_blank")}><InstagramOutlined size={18} className="icon" /> Instagram</li>
+            <li onClick={() => window.open("https://www.linkedin.com/in/dyno-docs-1064653b0", "_blank")}><LinkedinOutlined size={18} className="icon" /> LinkedIn</li>
           </ul>
         </div>
 

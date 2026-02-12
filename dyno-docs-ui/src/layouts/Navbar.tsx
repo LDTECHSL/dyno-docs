@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import DashboardRoundedIcon from "@mui/icons-material/DashboardRounded";
@@ -12,7 +12,9 @@ import DescriptionRoundedIcon from "@mui/icons-material/DescriptionRounded";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
 import PeopleAltRoundedIcon from "@mui/icons-material/PeopleAltRounded";
 import "../styles/navbar.css";
+import "../styles/agencyData.css";
 import logo from "../assets/dyno-docs.png";
+import logoutIcon from "../assets/switch.png";
 
 export type NavbarItem = {
     label: string;
@@ -23,7 +25,6 @@ export type NavbarItem = {
 export type NavbarProps = {
     children: ReactNode;
     items?: NavbarItem[];
-    userName?: string;
 };
 
 function Icon({ children }: { children: ReactNode }) {
@@ -123,14 +124,85 @@ const DEFAULT_ITEMS: NavbarItem[] = [
     },
 ];
 
-export default function Navbar({children, items, userName = "Unknown User"}: NavbarProps) {
-    
+export default function Navbar({ children, items }: NavbarProps) {
+
     const [mobileOpen, setMobileOpen] = useState(false);
+    const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
 
     const navItems = items ?? DEFAULT_ITEMS;
 
+    const token = sessionStorage.getItem("dd_token") || "";
+    const userName = sessionStorage.getItem("dd_full_name") || "User";
+
+    useEffect(() => {
+        if (!token) {
+            handleLogout();
+        }
+    }, [token]);
+
+    const handleLogout = () => {
+        sessionStorage.clear();
+        window.location.href = "/";
+    }
+
+    const handleLogoutClick = () => {
+        setLogoutConfirmOpen(true);
+    }
+
+    const handleLogoutConfirm = () => {
+        setLogoutConfirmOpen(false);
+        handleLogout();
+    }
+
+    const handleLogoutCancel = () => {
+        setLogoutConfirmOpen(false);
+    }
+
     return (
         <div className="app-shell">
+            {logoutConfirmOpen && (
+                <div
+                    className="ddModal"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Confirm logout"
+                >
+                    <button
+                        type="button"
+                        className="ddModal-backdrop"
+                        aria-label="Close"
+                        onClick={handleLogoutCancel}
+                    />
+
+                    <div className="ddModal-card">
+                        <div className="ddModal-logo" aria-hidden="true">
+                            <img className="ddModal-img" src={logoutIcon} alt="Logout icon" />
+                        </div>
+
+                        <div className="ddModal-title">Logout</div>
+                        <div className="ddModal-subtitle">
+                            Are you sure you want to logout?
+                        </div>
+
+                        <div className="ddModal-actions">
+                            <button
+                                type="button"
+                                className="ddModal-btn ddModal-btn--ghost"
+                                onClick={handleLogoutCancel}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn--danger"
+                                onClick={handleLogoutConfirm}
+                            >
+                                Logout
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             <aside
                 className={`sidebar ${mobileOpen ? "sidebar--open" : ""}`}
                 aria-label="Primary"
@@ -158,7 +230,7 @@ export default function Navbar({children, items, userName = "Unknown User"}: Nav
                 <button
                     type="button"
                     className="sidebar-logout"
-                    onClick={() => setMobileOpen(false)}
+                    onClick={handleLogoutClick}
                 >
                     Logout
                 </button>
@@ -198,7 +270,7 @@ export default function Navbar({children, items, userName = "Unknown User"}: Nav
                 <main className="main-content">
                     <div className="main-card">
                         {children}
-                    </div>                    
+                    </div>
                 </main>
             </div>
         </div>
