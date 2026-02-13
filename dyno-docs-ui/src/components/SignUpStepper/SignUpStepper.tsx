@@ -26,7 +26,9 @@ export type SignUpForm = {
   agencyLogoUrl?: string;
 
   // Plan Selection
-  planId?: string;
+  planId?: any;
+  planName?: string;
+  planType?: any;
   promoCode?: string;
   termsAccepted?: boolean;
 };
@@ -78,11 +80,17 @@ export default function SignUpStepper() {
       formdata.append("ConfirmPassword", (payload as any).confirmPassword ?? "");
 
       if (payload.planId) formdata.append("PlanId", payload.planId);
-      if (payload.promoCode) formdata.append("PromoCode", payload.promoCode);
+      formdata.append("PlanName", payload.planId === "1" ? "Free" : payload.planId === "2" ? "Professional" : "Enterprise");
+      formdata.append("PlanType", payload.planType ?? "");
+
+      console.log(payload);
+      console.log(payload.planId === "1" ? "Free" : payload.planId === "2" ? "Professional" : "Enterprise");
+      
+
 
       await registerAgency(formdata);
 
-      // API returns a Guid on success; show message and redirect to sign in
+      // // API returns a Guid on success; show message and redirect to sign in
       showSuccess("Registration successful. Please sign in.");
       window.location.href = "/";
     } catch (error: any) {
