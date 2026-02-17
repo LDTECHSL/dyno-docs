@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import { CircularProgress } from "@mui/material";
@@ -24,6 +24,8 @@ import { getPricingPlans } from "../services/pricing-plan-api";
 import { updateSubscription } from "../services/user-subscription-api";
 import { showError, showSuccess } from "../components/Toast";
 import CardPayment from "../components/CardPayment";
+import useIdleTimer from "../hooks/IdleTimer";
+import TimeoutImg from "../assets/waste.png";
 
 export type NavbarItem = {
     label: string;
@@ -132,6 +134,14 @@ const DEFAULT_ITEMS: NavbarItem[] = [
         ),
     },
 ];
+
+type SubscriptionInfo = {
+    plan: string;
+    expiry: string | null;
+    isActive: boolean;
+    reportLimit: string | null;
+    templateLimit: string | null;
+};
 
 type PricingModalProps = {
     open: boolean;
@@ -376,16 +386,32 @@ export default function Navbar({ children, items }: NavbarProps) {
     const [mobileOpen, setMobileOpen] = useState(false);
     const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
     const [pricingOpen, setPricingOpen] = useState(false);
+    const [idleModalOpen, setIdleModalOpen] = useState(false);
+    const [subscriptionInfo, setSubscriptionInfo] = useState<SubscriptionInfo>(() => ({
+        plan: sessionStorage.getItem("dd_subscription_plan") || "Free",
+        expiry: sessionStorage.getItem("dd_subscription_expiry"),
+        isActive: sessionStorage.getItem("dd_subscription_isActive") === "true",
+        reportLimit: sessionStorage.getItem("dd_report_limit"),
+        templateLimit: sessionStorage.getItem("dd_template_limit"),
+    }));
 
     const navItems = items ?? DEFAULT_ITEMS;
 
     const token = sessionStorage.getItem("dd_token") || "";
     const userName = sessionStorage.getItem("dd_full_name") || "User";
-    const subscriptionPlan = sessionStorage.getItem("dd_subscription_plan") || "Free";
-    const subscriptionExpiry = sessionStorage.getItem("dd_subscription_expiry");
-    const subscriptionIsActive = sessionStorage.getItem("dd_subscription_isActive") === "true";
-    const reportLimit = sessionStorage.getItem("dd_report_limit");
-    const templateLimit = sessionStorage.getItem("dd_template_limit");
+    const subscriptionPlan = subscriptionInfo.plan || "Free";
+    const subscriptionExpiry = subscriptionInfo.expiry;
+    const subscriptionIsActive = subscriptionInfo.isActive;
+    const reportLimit = subscriptionInfo.reportLimit;
+    const templateLimit = subscriptionInfo.templateLimit;
+
+    const persistSessionValue = (key: string, value: string | null) => {
+        if (value === null) {
+            sessionStorage.removeItem(key);
+        } else {
+            sessionStorage.setItem(key, value);
+        }
+    };
 
     const formattedExpiry = (() => {
         if (!subscriptionExpiry) return "";
@@ -398,16 +424,67 @@ export default function Navbar({ children, items }: NavbarProps) {
         });
     })();
 
+    const handleIdleModalClose = useCallback(() => {
+        setIdleModalOpen(false);
+        sessionStorage.clear();
+        window.location.href = "/";
+    }, []);
+
+    const handleIdleTimeout = () => {
+        setIdleModalOpen(true);
+    }
+
+    useIdleTimer({
+        timeout: 15 * 60 * 1000,
+        onIdle: handleIdleTimeout,
+    });
+
+    useEffect(() => {
+        if (!idleModalOpen) return;
+
+        const handleGlobalClick = () => {
+            handleIdleModalClose();
+        };
+
+        window.addEventListener("click", handleGlobalClick);
+
+        return () => {
+            window.removeEventListener("click", handleGlobalClick);
+        };
+    }, [idleModalOpen, handleIdleModalClose]);
+
     const handleMe = async () => {
         try {
             const res = await getMe(token, sessionStorage.getItem("dd_tenant_id") || "");
             console.log(res);
-            sessionStorage.setItem("dd_subscription_plan", res.planName);
-            sessionStorage.setItem("dd_subscription_expiry", res.endDate);
-            sessionStorage.setItem("dd_report_limit", res.reportsLimit);
-            sessionStorage.setItem("dd_template_limit", res.templatesLimit);
-            sessionStorage.setItem("dd_discount_percentage", res.discountPercentage);
-            sessionStorage.setItem("dd_subscription_isActive", res.isActive);
+
+            const nextInfo: SubscriptionInfo = {
+                plan: res.planName ?? "Free",
+                expiry: res.endDate ?? null,
+                isActive: Boolean(res.isActive),
+                reportLimit:
+                    res.reportsLimit === null || res.reportsLimit === undefined
+                        ? null
+                        : String(res.reportsLimit),
+                templateLimit:
+                    res.templatesLimit === null || res.templatesLimit === undefined
+                        ? null
+                        : String(res.templatesLimit),
+            };
+
+            setSubscriptionInfo(nextInfo);
+
+            sessionStorage.setItem("dd_subscription_plan", nextInfo.plan);
+            persistSessionValue("dd_subscription_expiry", nextInfo.expiry);
+            persistSessionValue("dd_report_limit", nextInfo.reportLimit);
+            persistSessionValue("dd_template_limit", nextInfo.templateLimit);
+            persistSessionValue(
+                "dd_discount_percentage",
+                res.discountPercentage === null || res.discountPercentage === undefined
+                    ? null
+                    : String(res.discountPercentage),
+            );
+            sessionStorage.setItem("dd_subscription_isActive", String(nextInfo.isActive));
         } catch (error) {
             console.error(error);
         }
@@ -487,6 +564,31 @@ export default function Navbar({ children, items }: NavbarProps) {
                             >
                                 Logout
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {idleModalOpen && (
+                <div
+                    className="ddModal"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Session timed out"
+                >
+                    <button
+                        type="button"
+                        className="ddModal-backdrop"
+                        aria-label="Dismiss session timeout"
+                        onClick={handleIdleModalClose}
+                    />
+
+                    <div className="ddModal-card">
+                        <div className="ddModal-title">Session timed out</div>
+                        <br />
+                        <img style={{width: "80px", height: "80px"}} src={TimeoutImg} alt="" />
+                        <br />
+                        <div className="ddModal-subtitle">
+                            You were inactive for too long. Click anywhere to continue.
                         </div>
                     </div>
                 </div>
@@ -586,7 +688,7 @@ export default function Navbar({ children, items }: NavbarProps) {
                                 {reportLimit && (
                                     <span className="subscription-metric">
                                         <DescriptionRoundedIcon className="subscription-metric-icon" fontSize="inherit" />
-                                        <span>{reportLimit} reports</span>
+                                        <span>{reportLimit === "-1" ? "Unlimited" : reportLimit} reports</span>
                                     </span>
                                 )}
 
@@ -597,7 +699,7 @@ export default function Navbar({ children, items }: NavbarProps) {
                                 {templateLimit && (
                                     <span className="subscription-metric">
                                         <ViewModuleRoundedIcon className="subscription-metric-icon" fontSize="inherit" />
-                                        <span>{templateLimit} templates</span>
+                                        <span>{templateLimit === "-1" ? "Unlimited" : templateLimit} templates</span>
                                     </span>
                                 )}
                             </div>
@@ -612,6 +714,21 @@ export default function Navbar({ children, items }: NavbarProps) {
                 </header>
 
                 <main className="main-content">
+                    {!subscriptionIsActive && (
+                        <div className="subscription-warning" role="alert">
+                            <div className="subscription-warning-text">
+                                <span className="subscription-warning-title">Subscription inactive</span>
+                                <span>Please activate your subscription plan.</span>                            </div>
+                            <button
+                                type="button"
+                                className="subscription-warning-action"
+                                onClick={() => setPricingOpen(true)}
+                            >
+                                View plans
+                            </button>
+                        </div>
+                    )}
+
                     <div className="main-card">
                         {children}
                     </div>
