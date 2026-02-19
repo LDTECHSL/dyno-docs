@@ -223,7 +223,47 @@ export default function ChatBot() {
                                                     This field is for display only - clients will type their messages here.
                                                 </p>
                                             </div>
-                                        ) : null}
+                                        ) : (
+                                            <div className="formField">
+                                                <div className="chatbot-options-header">
+                                                    <label className="formField-label">Client Options</label>
+                                                    <button
+                                                        type="button"
+                                                        className="chatbot-add-option-btn"
+                                                        disabled={flow.isLocked}
+                                                        onClick={() => addClientOption(flow.id)}
+                                                    >
+                                                        <AddIcon fontSize="small" />
+                                                        Add Option
+                                                    </button>
+                                                </div>
+                                                
+                                                <div className="chatbot-options-list">
+                                                    {flow.clientOptions.map((option) => (
+                                                        <div key={option.id} className="chatbot-option-item">
+                                                            <input
+                                                                type="text"
+                                                                className="formField-input"
+                                                                placeholder="Enter option text"
+                                                                value={option.text}
+                                                                disabled={flow.isLocked}
+                                                                onChange={(e) => updateClientOption(flow.id, option.id, e.target.value)}
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                className="chatbot-remove-option-btn"
+                                                                disabled={flow.isLocked}
+                                                                onClick={() => removeClientOption(flow.id, option.id)}
+                                                                aria-label="Remove option"
+                                                            >
+                                                                <DeleteOutlineIcon fontSize="small" />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                    
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Agent Side (Right) */}
