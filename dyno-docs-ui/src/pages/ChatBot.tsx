@@ -260,7 +260,11 @@ export default function ChatBot() {
                                                             </button>
                                                         </div>
                                                     ))}
-                                                    
+                                                    {flow.clientOptions.length === 0 && (
+                                                        <p className="chatbot-empty-options">
+                                                            Click "Add Option" to create selectable options for clients.
+                                                        </p>
+                                                    )}
                                                 </div>
                                             </div>
                                         )}
