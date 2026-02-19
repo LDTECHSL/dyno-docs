@@ -523,3 +523,31 @@
   }
 }
 
+/* ================================
+   Enhanced Focus States
+   ================================ */
+
+.chatbot-add-option-btn:focus,
+.chatbot-remove-btn:focus,
+.chatbot-remove-option-btn:focus,
+.chatbot-lock-btn:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ================================
+   Loading and Empty States
+   ================================ */
+
+.chatbot-flows:empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-8);
+  color: var(--color-text-gray);
+  font-size: var(--font-size-lg);
+}
+
+.chatbot-flows:empty::before {
+  content: "No dialog flows created yet. Click 'Add Dialog Step' to get started.";
+}
