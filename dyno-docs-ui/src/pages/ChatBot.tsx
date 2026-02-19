@@ -283,7 +283,14 @@ export default function ChatBot() {
                         <div className="ddModal-subtitle" style={{ textAlign: "left", marginTop: 8 }}>
                             High-level steps for enabling the chatbot experience:
                         </div>
-                       
+                        <div className="ddModal-content">
+                            <ol>
+                                <li>Generate your chatbot credentials from DynoDocs and copy the provided script snippet.</li>
+                                <li>Paste the snippet into your website or CRM portal where you want the chat icon to appear.</li>
+                                <li>Configure tenant-specific responses, handoff rules, and branding settings inside DynoDocs.</li>
+                                <li>Test the bot, then monitor conversations and usage analytics from the dashboard.</li>
+                            </ol>
+                        </div>
                     </div>
                 </div>
             )}
