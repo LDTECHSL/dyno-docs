@@ -270,6 +270,23 @@ export default function ChatBot() {
                 </div>
             </div>
 
+            {infoOpen && (
+                <div className="ddModal" role="dialog" aria-modal="true" aria-label="Chatbot integration guide">
+                    <button
+                        type="button"
+                        className="ddModal-backdrop"
+                        aria-label="Close"
+                        onClick={() => setInfoOpen(false)}
+                    />
+
+                    <div className="ddModal-card">
+                        <div className="ddModal-subtitle" style={{ textAlign: "left", marginTop: 8 }}>
+                            High-level steps for enabling the chatbot experience:
+                        </div>
+                       
+                    </div>
+                </div>
+            )}
         </Navbar>
     );
 }
