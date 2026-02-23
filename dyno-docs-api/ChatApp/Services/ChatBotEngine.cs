@@ -16,6 +16,23 @@ public class ChatBotEngine : IChatBotEngine
         _context = context;
         _currentUserService = currentUserService;
     }
+    
+    public async Task<Guid> CreateChatBotAsync (Guid tenantId, CreateChatbotDto dto)
+    {
+        var bot = new Chat()
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            Name = dto.Name,
+            IsActive = true,
+            CreatedAt = DateTime.Now,
+            CreatedBy = _currentUserService.UserName ?? "system"
+        };
+        
+        _context.Chats.Add(bot);
+        await _context.SaveChangesAsync();
+        return bot.Id;
+    }
 
     public async Task<ChatbotCommands?> ProcessUserMessageAsync(Guid chatId, string userMessage)
     {
@@ -46,6 +63,9 @@ public class ChatBotEngine : IChatBotEngine
 
     public async Task<ChatbotCommands> AddBotCommandAsync(Guid tenantId, CreateChatbotCommandDto dto)
     {
+        var existingCommands = await _context.ChatbotCommands
+            .Where(c => c.ChatId == dto.ChatId).ToListAsync();
+        
         var command = new ChatbotCommands
         {
             Id = Guid.NewGuid(),
@@ -69,7 +89,7 @@ public class ChatBotEngine : IChatBotEngine
     public async Task<ChatbotCommands?> UpdateBotCommandAsync(Guid commandId, Guid tenantId, UpdateChatbotCommandDto dto)
     {
         var command = await _context.ChatbotCommands
-            .FirstOrDefaultAsync(c => c.Id == commandId && c.TenantId == tenantId);
+            .FirstOrDefaultAsync(c => c.ChatId == commandId && c.TenantId == tenantId);
 
         if (command == null) return null;
 
@@ -98,6 +118,12 @@ public class ChatBotEngine : IChatBotEngine
         await _context.SaveChangesAsync();
 
         return true;
+    }
+    
+    public async Task<string> GetBotNameAsync(Guid chatId)
+    {
+        var chat = await _context.Chats.FirstOrDefaultAsync(c => c.Id == chatId);
+        return chat?.Name ?? "Tourism Bot";
     }
 
     private async Task<ChatbotCommands> GetDefaultWelcomeCommandAsync(Guid chatId)

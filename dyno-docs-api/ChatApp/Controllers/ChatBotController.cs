@@ -8,7 +8,6 @@ namespace ChatApp.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
 public class ChatBotController : ControllerBase
 {
     private readonly IChatBotEngine _chatBotEngine;
@@ -20,6 +19,21 @@ public class ChatBotController : ControllerBase
     {
         _chatBotEngine = chatBotEngine;
         _tenantService = tenantService;
+    }
+    
+    [HttpPost("create-bot")]
+    [Authorize]
+    public async Task<Guid> CreateBot([FromBody] CreateChatbotDto dto)
+    {
+        try
+        {
+            var bot = await _chatBotEngine.CreateChatBotAsync(_tenantService.TenantId, dto);
+            return bot;
+        }
+        catch (Exception ex)
+        {
+            throw new Exception("Failed to create chatbot", ex);
+        }
     }
 
     /// <summary>Process a tourist message and return a matching bot command.</summary>
@@ -45,6 +59,8 @@ public class ChatBotController : ControllerBase
     }
 
     /// <summary>Get all bot commands for a specific chat, ordered by Index.</summary>
+    ///
+    [AllowAnonymous]
     [HttpGet("commands/{chatId}")]
     public async Task<IActionResult> GetBotCommands(Guid chatId)
     {
@@ -61,9 +77,24 @@ public class ChatBotController : ControllerBase
             return StatusCode(500, new { message = "Failed to get bot commands", error = ex.Message });
         }
     }
+    
+    [HttpGet("bot-name/{chatId}")]
+    public async Task<IActionResult> GetBotName(Guid chatId)
+    {
+        try
+        {
+            var botName = await _chatBotEngine.GetBotNameAsync(chatId);
+            return Ok(new { botName });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "Failed to get bot name", error = ex.Message });
+        }
+    }
 
     /// <summary>Add a new bot command to a chat manually.</summary>
     [HttpPost("commands")]
+    [Authorize]
     public async Task<IActionResult> AddBotCommand([FromBody] CreateChatbotCommandDto dto)
     {
         try
@@ -83,6 +114,7 @@ public class ChatBotController : ControllerBase
 
     /// <summary>Update an existing bot command (partial — only provided fields are changed).</summary>
     [HttpPut("commands/{commandId}")]
+    [Authorize]
     public async Task<IActionResult> UpdateBotCommand(Guid commandId, [FromBody] UpdateChatbotCommandDto dto)
     {
         try
@@ -105,6 +137,7 @@ public class ChatBotController : ControllerBase
 
     /// <summary>Delete a bot command.</summary>
     [HttpDelete("commands/{commandId}")]
+    [Authorize]
     public async Task<IActionResult> DeleteBotCommand(Guid commandId)
     {
         try
