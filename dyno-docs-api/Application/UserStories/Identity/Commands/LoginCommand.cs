@@ -22,6 +22,7 @@ public record LoginResponse
     public required string AgencyName { get; init; }
     public required Guid TenantId { get; init; }
     public required Guid UserId { get; init; }
+    public Guid? ChatUserId { get; init; }
 }
 
 public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
@@ -47,7 +48,6 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
             .IgnoreQueryFilters()
             .FirstOrDefaultAsync(u => u.Email == request.Email, cancellationToken);
 
-
         user.ThrowIfNull("Invalid email or password.");
 
 
@@ -65,30 +65,10 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
 
         // Generate main app token (same token works for chat — TenantId & UserId are in claims)
         var token = _jwtService.GenerateToken(user);
-
-        // Ensure ChatUser exists for this agency owner
-        var chatUser = await _chatContext.ChatUsers
-            .FirstOrDefaultAsync(cu => cu.Email == user.Email && cu.TenantId == user.TenantId, cancellationToken);
-
-        if (chatUser == null)
-        {
-            // Create chat user if doesn't exist
-            chatUser = new ChatUser
-            {
-                Id = Guid.NewGuid(),
-                TenantId = user.TenantId,
-                Email = user.Email,
-                Name = user.FullName,
-                Role = UserRole.Admin, // Agency owners are Admins in chat
-                IsBotOn = false,
-                IsOnline = false,
-                CreatedAt = DateTime.UtcNow,
-                CreatedBy = "system"
-            };
-
-            _chatContext.ChatUsers.Add(chatUser);
-            await _chatContext.SaveChangesAsync(cancellationToken);
-        }
+        
+        var chatUser = await _chatContext.Chats.FirstOrDefaultAsync(cu => cu.TenantId == user.TenantId, cancellationToken);
+        
+        var chatUserId = chatUser?.Id;
 
         var response = new LoginResponse
         {
@@ -98,7 +78,8 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
             MobileNo = user.MobileNo,
             AgencyName = tenant.AgencyName,
             TenantId = user.TenantId,
-            UserId = user.Id
+            UserId = user.Id,
+            ChatUserId = chatUserId
         };
 
         return response;
