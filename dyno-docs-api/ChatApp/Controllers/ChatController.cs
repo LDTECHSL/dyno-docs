@@ -96,6 +96,38 @@ public class ChatController : ControllerBase
             return StatusCode(500, new { message = "Client registration failed", error = ex.Message });
         }
     }
+    
+    [HttpPost("check-client")]
+    [AllowAnonymous]
+    public async Task<IActionResult> CheckClientExists([FromQuery] string email)
+    {
+        try
+        {
+            var chatUser = await _context.ChatUsers
+                .FirstOrDefaultAsync(u => u.Email == email
+                                       && u.Role == UserRole.Client);
+
+            if (chatUser == null)
+                return NotFound(new { message = "Client not found" });
+
+            return Ok(new
+            {
+                chatUser = new
+                {
+                    chatUser.Id,
+                    chatUser.Name,
+                    chatUser.Email,
+                    chatUser.TenantId,
+                    chatUser.Role,
+                    chatUser.IsBotOn
+                },
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "Failed to check client", error = ex.Message });
+        }
+    }
 
     /// <summary>
     /// Login an existing client by email + tenantId.
@@ -175,20 +207,11 @@ public class ChatController : ControllerBase
     {
         try
         {
-            var currentUserId = _currentUserService.UserId;
-            if (currentUserId == null)
-                return Unauthorized(new { message = "User not authenticated" });
-
-            var chat = await _context.Chats.FindAsync(request.ChatId);
-            if (chat == null || chat.TenantId != _tenantService.TenantId)
-                return NotFound(new { message = "Chat not found" });
-
-            // Find ChatUser by matching TenantId — main app user mapped to ChatUser
             var chatUser = await _context.ChatUsers
-                .FirstOrDefaultAsync(u => u.TenantId == _tenantService.TenantId && u.Id == currentUserId);
+                .FirstOrDefaultAsync(u => u.Id == request.ChatUserId);
 
             if (chatUser == null)
-                return Unauthorized(new { message = "Chat user not found" });
+                return Unauthorized(new { message = "Chat user not found or unauthorized" });
 
             var senderType = chatUser.Role == UserRole.Client ? SenderType.Client : SenderType.Agent;
 
@@ -200,15 +223,15 @@ public class ChatController : ControllerBase
             var message = new ChatMessage
             {
                 Id = Guid.NewGuid(),
-                TenantId = _tenantService.TenantId,
+                TenantId = request.TenantId,
                 ChatId = request.ChatId,
-                ChatUserId = currentUserId.Value,
+                ChatUserId = request.ChatUserId,
                 Message = request.Message,
-                SenderType = senderType,
+                SenderType = request.SenderType,
                 ConversationIndex = request.ConversationIndex,
                 OrderSequence = (lastMessage?.OrderSequence ?? 0) + 1,
                 IsRead = false,
-                CreatedAt = DateTime.UtcNow,
+                CreatedAt = DateTime.Now,
                 CreatedBy = _currentUserService.UserName ?? "system"
             };
 
@@ -228,12 +251,8 @@ public class ChatController : ControllerBase
     {
         try
         {
-            var chat = await _context.Chats.FindAsync(chatId);
-            if (chat == null || chat.TenantId != _tenantService.TenantId)
-                return NotFound(new { message = "Chat not found" });
-
             var query = _context.ChatMessages
-                .Where(m => m.ChatId == chatId)
+                .Where(m => m.ChatUserId == chatId)
                 .Include(m => m.ChatUser)
                 .OrderBy(m => m.OrderSequence);
 
@@ -320,8 +339,12 @@ public class ChatController : ControllerBase
 public class SendMessageRequest
 {
     public Guid ChatId { get; set; }
+    public Guid ChatUserId { get; set; }
+    public Guid TenantId { get; set; }
     public string Message { get; set; }
     public int? ConversationIndex { get; set; }
+    
+    public SenderType SenderType { get; set; }
 }
 
 public class RegisterClientRequest
@@ -336,4 +359,3 @@ public class ClientLoginRequest
     public Guid TenantId { get; set; }   // Which agency's chat
     public string Email { get; set; }
 }
-
