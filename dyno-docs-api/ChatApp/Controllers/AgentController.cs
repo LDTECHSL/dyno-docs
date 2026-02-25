@@ -38,6 +38,7 @@ public class AgentController : ControllerBase
             var availableChats = await _context.Chats
                 .Where(c => c.TenantId == _tenantService.TenantId && c.IsActive)
                 .Include(c => c.ChatUsers.Where(cu => cu.Role == UserRole.Client))
+                .Include(c => c.Messages)
                 .OrderByDescending(c => c.CreatedAt)
                 .ToListAsync();
 
@@ -50,7 +51,8 @@ public class AgentController : ControllerBase
                 {
                     cu.Id,
                     cu.Name,
-                    cu.Email
+                    cu.Email,
+                    UnreadMessageCount = c.Messages.Count(m => m.ChatUserId == cu.Id && !m.IsRead)
                 })
             }));
         }
@@ -93,6 +95,37 @@ public class AgentController : ControllerBase
         catch (Exception ex)
         {
             return StatusCode(500, new { message = "Failed to get my chats", error = ex.Message });
+        }
+    }
+    
+    [HttpPut("read-messages/{chatId}")]
+    public async Task<IActionResult> MarkMessagesAsRead(Guid chatId)
+    {
+        try
+        {
+            var currentUserId = _currentUserService.UserId;
+
+            var messagesToMark = await _context.ChatMessages
+                .Where(m =>  m.ChatUserId == chatId && !m.IsRead)
+                .ToListAsync();
+
+            if (!messagesToMark.Any())
+            {
+                return Ok(new { message = "No unread messages to mark as read" });
+            }
+
+            foreach (var message in messagesToMark)
+            {
+                message.IsRead = true;
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = $"{messagesToMark.Count} messages marked as read" });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "Failed to mark messages as read", error = ex.Message });
         }
     }
 
@@ -143,6 +176,55 @@ public class AgentController : ControllerBase
         catch (Exception ex)
         {
             return StatusCode(500, new { message = "Failed to toggle bot mode", error = ex.Message });
+        }
+    }
+    
+    [HttpGet("bot-status")]
+    public async Task<IActionResult> GetBotStatus(Guid chatUserId)
+    {
+        try
+        {
+            var botCommands = await _context.ChatbotCommands
+                .Where(c => c.TenantId == _tenantService.TenantId)
+                .ToListAsync();
+            
+            var message = await _context.ChatMessages
+                .Where(m => m.ChatUserId == chatUserId && m.ConversationIndex == botCommands.Count)
+                .FirstOrDefaultAsync();
+            
+            if (message == null)
+            {
+                return Ok(new { message = "Bot is On" });
+            }
+            else
+            {
+                return Ok(new {message = "Bot is Off" });
+            }
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "Failed to get bot status", error = ex.Message });
+        }
+    }
+
+    [HttpGet("unread-chat-count")]
+    public async Task<IActionResult> GetUnreadChatCount()
+    {
+        try
+        {
+            var currentUserId = _currentUserService.UserId;
+
+            var unreadChatCount = await _context.Chats
+                .Where(c => c.TenantId == _tenantService.TenantId)
+                .Include(c => c.Messages.Where(m => m.TenantId == _tenantService.TenantId && !m.IsRead))
+                .Where(c => c.Messages.Any(m => m.TenantId == _tenantService.TenantId && !m.IsRead))
+                .CountAsync();
+
+            return Ok(new { unreadChatCount });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "Failed to get unread chat count", error = ex.Message });
         }
     }
 }
