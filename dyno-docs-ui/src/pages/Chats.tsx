@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
 import SendIcon from "@mui/icons-material/Send";
+import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
 import PersonIcon from "@mui/icons-material/Person";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -46,6 +47,7 @@ export default function Chats() {
     const [botStatus, setBotStatus] = useState(false);
     const isRefreshingRef = useRef(false); // Prevent concurrent refreshes
     const [isAiThinking, setIsAiThinking] = useState(false);
+    const [infoOpen, setInfoOpen] = useState(false);
 
     useEffect(() => {
         loadChats();
@@ -667,8 +669,8 @@ export default function Chats() {
                         <button
                             type="button"
                             className="infoBtn"
-                            aria-label="Agency data steps"
-                        // onClick={() => setInfoOpen(true)}
+                            aria-label="Chats guide"
+                            onClick={() => setInfoOpen(true)}
                         >
                             <InfoOutline fontSize="small" />
                         </button>
@@ -863,6 +865,32 @@ export default function Chats() {
                     </div>
                 </div>
             </div>
+
+            {infoOpen && (
+                <div className="ddModal" role="dialog" aria-modal="true" aria-label="Chats guide">
+                    <button
+                        type="button"
+                        className="ddModal-backdrop"
+                        aria-label="Close"
+                        onClick={() => setInfoOpen(false)}
+                    />
+
+                    <div className="ddModal-card">
+                        <div className="ddModal-title">Chats Guide</div>
+                        <div className="ddModal-subtitle" style={{ textAlign: "left", marginTop: 8 }}>
+                            Manage and respond to live customer conversations:
+                        </div>
+                        <div className="ddModal-content">
+                            <ol>
+                                <li>Select a conversation from the left panel to load messages.</li>
+                                <li>Use the message box to reply when the bot is not active.</li>
+                                <li>Summarize Chat creates a quick AI summary for this conversation.</li>
+                                <li>Unread message counts update automatically after viewing a chat.</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* AI Thinking Modal */}
             {isAiThinking && (
