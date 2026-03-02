@@ -411,6 +411,42 @@ namespace Infrastructure.Migrations
                     b.ToTable("PromoCode");
                 });
 
+            modelBuilder.Entity("Domain.Entities.Operations.Report", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("char(36)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("CustomerEmail")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("CustomerName")
+                        .HasColumnType("longtext");
+
+                    b.Property<string>("GeneratedReport")
+                        .HasColumnType("longtext");
+
+                    b.Property<DateTime?>("LastModifiedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("LastModifiedBy")
+                        .HasColumnType("longtext");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("char(36)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Report");
+                });
+
             modelBuilder.Entity("Domain.Entities.Operations.Template", b =>
                 {
                     b.Property<Guid>("Id")
