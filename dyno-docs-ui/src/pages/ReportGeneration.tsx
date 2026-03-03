@@ -2,6 +2,7 @@ import { InfoOutline, NavigateNext, NavigateBefore } from "@mui/icons-material";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
 import CircularProgress from "@mui/material/CircularProgress";
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import Navbar from "../layouts/Navbar";
 import "../styles/agencyData.css";
 import { showSuccess, showError } from "../components/Toast";
@@ -9,10 +10,14 @@ import { getDataByDistrict } from "../services/agency-data-api";
 import { getPartnershipByDistrict } from "../services/partnership-api";
 import { generateDayDescription } from "../services/ai-api";
 import { getUserTemplates } from "../services/template-api";
+import { generateReport } from "../services/reports-api";
+import { validatePromoCode } from "../services/promo-codes-api";
 
 export default function ReportGeneration() {
+    const navigate = useNavigate();
     const [infoOpen, setInfoOpen] = useState(false);
-    const [currentStep, setCurrentStep] = useState(3);
+    const [currentStep, setCurrentStep] = useState(1);
+    const [savingReport, setSavingReport] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [districtData, setDistrictData] = useState<{ [key: string]: any }>({});
@@ -24,8 +29,9 @@ export default function ReportGeneration() {
     const [templates, setTemplates] = useState<any[]>([]);
     const [loadingTemplates, setLoadingTemplates] = useState(false);
     const [reportModalOpen, setReportModalOpen] = useState(false);
-    const [generatedReport, setGeneratedReport] = useState<{ templateDesign: any; template: any } | null>(null);
-    const [exportMenuOpen, setExportMenuOpen] = useState(false);
+    const [generatedReport] = useState<any>(null);
+    const [validatingPromoCode, setValidatingPromoCode] = useState(false);
+    const [promoCodeMessage, setPromoCodeMessage] = useState<string>("");
     const dayCardRefs = useRef<{ [key: number]: HTMLDivElement | null }>({});
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -61,6 +67,7 @@ export default function ReportGeneration() {
         customerName: "",
         country: "",
         mobileNo: "",
+        email: "",
         transportationMode: "",
         numberOfPassengers: "",
         daysAndNights: "",
@@ -84,6 +91,13 @@ export default function ReportGeneration() {
             remarks: string;
         }>,
         selectedTemplate: "",
+        specialRemark: "The final Detailed itinerary will be send 48 hours after the confirmation.",
+        bookingPolicy: "Once booking details are completed and submitted by the client, we will proceed with booking reservations. At this stage, it is required to make a payment of 40% of the total tour package. Booking confirmation will reach you 48 hours after making the payment. The balance 60% of the payment is required to be paid 30 days prior the tour commencing date. You may proceed with Visa processing after the booking confirmation.",
+        cancellationPolicy: "All travel offers listed on our travel website are discounted and all orders are non-refundable and cannot be used in conjunction with any other promotions, thus no refund for cancellations made within less than 30 days from the start of a tour and no -show.",
+        totalAmount: "",
+        promoCode: "",
+        promoCodeDiscount: 0,
+        finalAmount: 0,
     });
 
     const routeOptions = [
@@ -339,6 +353,77 @@ export default function ReportGeneration() {
         }));
     };
 
+    const handlePromoCodeValidation = async () => {
+        if (!formData.promoCode.trim()) {
+            setPromoCodeMessage("");
+            setFormData(prev => ({
+                ...prev,
+                promoCodeDiscount: 0,
+                finalAmount: parseFloat(prev.totalAmount) || 0
+            }));
+            return;
+        }
+
+        if (!formData.totalAmount) {
+            showError("Please enter the total amount first");
+            return;
+        }
+
+        setValidatingPromoCode(true);
+        setPromoCodeMessage("");
+
+        try {
+            const response = await validatePromoCode({
+                code: formData.promoCode,
+                purchaseAmount: parseFloat(formData.totalAmount)
+            });
+
+            if (response.data.isValid) {
+                const discount = response.data.calculatedDiscount || 0;
+                const finalAmount = parseFloat(formData.totalAmount) - discount;
+                
+                setFormData(prev => ({
+                    ...prev,
+                    promoCodeDiscount: discount,
+                    finalAmount: Math.max(0, finalAmount)
+                }));
+                
+                setPromoCodeMessage(`✅ Valid promo code! Discount: LKR ${discount.toFixed(2)}`);
+                showSuccess("Promo code applied successfully!");
+            } else {
+                setFormData(prev => ({
+                    ...prev,
+                    promoCodeDiscount: 0,
+                    finalAmount: parseFloat(prev.totalAmount) || 0
+                }));
+                setPromoCodeMessage(`❌ ${response.data.message || "Invalid promo code"}`);
+                showError(response.data.message || "Invalid promo code");
+            }
+        } catch (error: any) {
+            console.error("Error validating promo code:", error);
+            setFormData(prev => ({
+                ...prev,
+                promoCodeDiscount: 0,
+                finalAmount: parseFloat(prev.totalAmount) || 0
+            }));
+            setPromoCodeMessage(`❌ Failed to validate promo code`);
+            showError("Failed to validate promo code. Please try again.");
+        } finally {
+            setValidatingPromoCode(false);
+        }
+    };
+
+    const handleTotalAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
+        const numericValue = parseFloat(value) || 0;
+        
+        setFormData(prev => ({
+            ...prev,
+            totalAmount: value,
+            finalAmount: numericValue - prev.promoCodeDiscount
+        }));
+    };
+
     const isStepValid = (step: number): boolean => {
         switch (step) {
             case 1:
@@ -346,6 +431,7 @@ export default function ReportGeneration() {
                     formData.customerName.trim() !== "" &&
                     formData.country.trim() !== "" &&
                     formData.mobileNo.trim() !== "" &&
+                    formData.email.trim() !== "" &&
                     formData.numberOfPassengers.trim() !== "" &&
                     formData.daysAndNights.trim() !== ""
                 );
@@ -359,7 +445,7 @@ export default function ReportGeneration() {
                     formData.dayCards.every(card => !!generatedDescriptions[card.id])
                 );
             case 3:
-                return formData.selectedTemplate.trim() !== "";
+                return formData.selectedTemplate.trim() !== "" && formData.totalAmount.trim() !== "" && parseFloat(formData.totalAmount) > 0;
             default:
                 return false;
         }
@@ -404,17 +490,27 @@ export default function ReportGeneration() {
 
     const handleGenerate = async () => {
         if (!isStepValid(3)) {
-            showError("Please select a template");
+            showError("Please fill in all required fields and ensure total amount is greater than 0 before generating the report");
+            return;
+        }
+
+        const token = sessionStorage.getItem('dd_token');
+        const tenantId = sessionStorage.getItem('dd_tenant_id');
+        if (!token) {
+            showError('Authentication required. Please log in.');
             return;
         }
 
         setIsLoading(true);
+        setSavingReport(true);
         try {
             const selected = templates.find(
                 (t) => (t.id ?? t.templateId)?.toString() === formData.selectedTemplate
             );
             if (!selected) {
                 showError("Selected template not found");
+                setIsLoading(false);
+                setSavingReport(false);
                 return;
             }
             let templateDesign: any;
@@ -423,15 +519,121 @@ export default function ReportGeneration() {
                 templateDesign = typeof raw === "string" ? JSON.parse(raw) : raw;
             } catch {
                 showError("Failed to parse template design.");
+                setIsLoading(false);
+                setSavingReport(false);
                 return;
             }
-            setGeneratedReport({ templateDesign, template: selected });
-            setReportModalOpen(true);
-            showSuccess("Report generated successfully!");
-        } catch (error) {
-            showError("Failed to generate report. Please try again.");
+
+            // Build complete report structure with all pages
+            const completeReport = {
+                version: "1.0",
+                metadata: {
+                    customerName: formData.customerName,
+                    customerEmail: formData.email,
+                    country: formData.country,
+                    mobileNo: formData.mobileNo,
+                    transportationMode: formData.transportationMode,
+                    numberOfPassengers: formData.numberOfPassengers,
+                    daysAndNights: formData.daysAndNights,
+                    selectedRoutes: formData.selectedRoutes,
+                    createdAt: new Date().toISOString(),
+                },
+                cost: {
+                    totalAmount: parseFloat(formData.totalAmount) || 0,
+                    promoCode: formData.promoCode,
+                    promoCodeDiscount: formData.promoCodeDiscount,
+                    finalAmount: formData.finalAmount,
+                },
+                policies: {
+                    specialRemark: formData.specialRemark,
+                    bookingPolicy: formData.bookingPolicy,
+                    cancellationPolicy: formData.cancellationPolicy,
+                },
+                template: {
+                    id: selected.id ?? selected.templateId,
+                    name: selected.templateName ?? selected.name,
+                    thumbnail: selected.templateThumbnail,
+                },
+                templateDesign: templateDesign,
+                pages: [
+                    // Template cover pages
+                    ...(templateDesign?.pages || []).map((page: any, idx: number) => ({
+                        type: 'template',
+                        pageNumber: idx + 1,
+                        content: page,
+                    })),
+                    // Customer info page
+                    {
+                        type: 'customerInfo',
+                        pageNumber: (templateDesign?.pages?.length ?? 1) + 1,
+                        content: {
+                            customerName: formData.customerName,
+                            country: formData.country,
+                            mobileNo: formData.mobileNo,
+                            email: formData.email,
+                            transportationMode: formData.transportationMode,
+                            numberOfPassengers: formData.numberOfPassengers,
+                            daysAndNights: formData.daysAndNights,
+                            selectedRoutes: formData.selectedRoutes,
+                        },
+                    },
+                    // Day pages
+                    ...formData.dayCards.map((dayCard, dayIdx) => ({
+                        type: 'dayDetail',
+                        pageNumber: (templateDesign?.pages?.length ?? 1) + 2 + dayIdx,
+                        dayNumber: dayIdx + 1,
+                        content: {
+                            selectedDay: dayCard.selectedDay,
+                            visitingPlaces: dayCard.visitingPlaces,
+                            selectedPlaces: dayCard.selectedPlaces,
+                            selectedHotels: dayCard.selectedHotels,
+                            remarks: dayCard.remarks,
+                            description: generatedDescriptions[dayCard.id] || '',
+                        },
+                    })),
+                    // Cost page
+                    {
+                        type: 'cost',
+                        pageNumber: (templateDesign?.pages?.length ?? 1) + 2 + formData.dayCards.length,
+                        content: {
+                            totalAmount: parseFloat(formData.totalAmount) || 0,
+                            promoCode: formData.promoCode,
+                            promoCodeDiscount: formData.promoCodeDiscount,
+                            finalAmount: formData.finalAmount,
+                        },
+                    },
+                    // Policies page
+                    {
+                        type: 'policies',
+                        pageNumber: (templateDesign?.pages?.length ?? 1) + 3 + formData.dayCards.length,
+                        content: {
+                            specialRemark: formData.specialRemark,
+                            bookingPolicy: formData.bookingPolicy,
+                            cancellationPolicy: formData.cancellationPolicy,
+                        },
+                    },
+                ],
+                totalPages: (templateDesign?.pages?.length ?? 1) + 3 + formData.dayCards.length,
+            };
+
+            const reportPayload = {
+                tenantId: tenantId!,
+                customerName: formData.customerName,
+                customerEmail: formData.email,
+                generatedReport: JSON.stringify(completeReport),
+            };
+
+            await generateReport(reportPayload, token);
+            showSuccess('Report generated and saved successfully!');
+            setTimeout(() => {
+                navigate('/report-history');
+            }, 1500);
+        } catch (error: any) {
+            console.error('Error generating report:', error);
+            showError(error?.response?.data?.message || 'Failed to generate report. Please try again.');
         } finally {
             setIsLoading(false);
+            setSavingReport(false);
         }
     };
 
@@ -445,6 +647,7 @@ export default function ReportGeneration() {
                 customerName: "",
                 country: "",
                 mobileNo: "",
+                email: "",
                 transportationMode: "",
                 numberOfPassengers: "",
                 daysAndNights: "",
@@ -461,6 +664,13 @@ export default function ReportGeneration() {
                     }
                 ],
                 selectedTemplate: "",
+                specialRemark: "The final Detailed itinerary will be send 48 hours after the confirmation.",
+                bookingPolicy: "Once booking details are completed and submitted by the client, we will proceed with booking reservations. At this stage, it is required to make a payment of 40% of the total tour package. Booking confirmation will reach you 48 hours after making the payment. The balance 60% of the payment is required to be paid 30 days prior the tour commencing date. You may proceed with Visa processing after the booking confirmation.",
+                cancellationPolicy: "All travel offers listed on our travel website are discounted and all orders are non-refundable and cannot be used in conjunction with any other promotions, thus no refund for cancellations made within less than 30 days from the start of a tour and no -show.",
+                totalAmount: "",
+                promoCode: "",
+                promoCodeDiscount: 0,
+                finalAmount: 0,
             });
             setCurrentStep(1);
         }
@@ -603,6 +813,19 @@ export default function ReportGeneration() {
                                             className="formField-input"
                                             placeholder="Enter customer mobile no"
                                             value={formData.mobileNo}
+                                            onChange={handleInputChange}
+                                        />
+                                    </div>
+                                    <div className="formField">
+                                        <label className="formField-label">
+                                            Email
+                                        </label>
+                                        <input
+                                            type="email"
+                                            name="email"
+                                            className="formField-input"
+                                            placeholder="Enter customer email"
+                                            value={formData.email}
                                             onChange={handleInputChange}
                                         />
                                     </div>
@@ -1955,6 +2178,205 @@ export default function ReportGeneration() {
                         {currentStep === 3 && (
                             <div className="formGroup">
                                 <h3 style={{ marginTop: 0, marginBottom: 20 }}>
+                                    Policies & Template
+                                </h3>
+
+                                {/* Special Remark Field */}
+                                <div style={{ marginBottom: "20px" }}>
+                                    <label style={{ display: "block", marginBottom: "8px", fontSize: "13px", fontWeight: "600", color: "#1f2937" }}>
+                                        Special Remark
+                                    </label>
+                                    <textarea
+                                        name="specialRemark"
+                                        value={formData.specialRemark}
+                                        onChange={handleInputChange}
+                                        placeholder="Enter special remark..."
+                                        style={{
+                                            width: "100%",
+                                            padding: "12px",
+                                            border: "1px solid #d1d5db",
+                                            borderRadius: "8px",
+                                            fontSize: "13px",
+                                            fontFamily: "inherit",
+                                            minHeight: "80px",
+                                            resize: "vertical",
+                                        }}
+                                    />
+                                </div>
+
+                                {/* Booking Policy Field */}
+                                <div style={{ marginBottom: "20px" }}>
+                                    <label style={{ display: "block", marginBottom: "8px", fontSize: "13px", fontWeight: "600", color: "#1f2937" }}>
+                                        Booking Policy
+                                    </label>
+                                    <textarea
+                                        name="bookingPolicy"
+                                        value={formData.bookingPolicy}
+                                        onChange={handleInputChange}
+                                        placeholder="Enter booking policy..."
+                                        style={{
+                                            width: "100%",
+                                            padding: "12px",
+                                            border: "1px solid #d1d5db",
+                                            borderRadius: "8px",
+                                            fontSize: "13px",
+                                            fontFamily: "inherit",
+                                            minHeight: "100px",
+                                            resize: "vertical",
+                                        }}
+                                    />
+                                </div>
+
+                                {/* Cancellation Policy Field */}
+                                <div style={{ marginBottom: "20px" }}>
+                                    <label style={{ display: "block", marginBottom: "8px", fontSize: "13px", fontWeight: "600", color: "#1f2937" }}>
+                                        Cancellation Policy
+                                    </label>
+                                    <textarea
+                                        name="cancellationPolicy"
+                                        value={formData.cancellationPolicy}
+                                        onChange={handleInputChange}
+                                        placeholder="Enter cancellation policy..."
+                                        style={{
+                                            width: "100%",
+                                            padding: "12px",
+                                            border: "1px solid #d1d5db",
+                                            borderRadius: "8px",
+                                            fontSize: "13px",
+                                            fontFamily: "inherit",
+                                            minHeight: "100px",
+                                            resize: "vertical",
+                                        }}
+                                    />
+                                </div>
+
+                                <hr style={{ margin: "24px 0", border: "none", borderTop: "1px solid #e5e7eb" }} />
+
+                                {/* Cost Section */}
+                                <h3 style={{ marginTop: 20, marginBottom: 20 }}>
+                                    Cost Information
+                                </h3>
+
+                                {/* Total Amount Field */}
+                                <div style={{ marginBottom: "20px" }}>
+                                    <label style={{ display: "block", marginBottom: "8px", fontSize: "13px", fontWeight: "600", color: "#1f2937" }}>
+                                        Total Amount (LKR) *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        name="totalAmount"
+                                        value={formData.totalAmount}
+                                        onChange={handleTotalAmountChange}
+                                        placeholder="Enter total amount in LKR..."
+                                        step="0.01"
+                                        min="0"
+                                        required
+                                        style={{
+                                            width: "100%",
+                                            padding: "12px",
+                                            border: "1px solid #d1d5db",
+                                            borderRadius: "8px",
+                                            fontSize: "13px",
+                                            fontFamily: "inherit",
+                                        }}
+                                    />
+                                </div>
+
+                                {/* Promo Code Field */}
+                                <div style={{ marginBottom: "20px" }}>
+                                    <label style={{ display: "block", marginBottom: "8px", fontSize: "13px", fontWeight: "600", color: "#1f2937" }}>
+                                        Promo Code (Optional)
+                                    </label>
+                                    <div style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
+                                        <input
+                                            type="text"
+                                            name="promoCode"
+                                            value={formData.promoCode}
+                                            onChange={handleInputChange}
+                                            placeholder="Enter promo code..."
+                                            style={{
+                                                flex: 1,
+                                                padding: "12px",
+                                                border: "1px solid #d1d5db",
+                                                borderRadius: "8px",
+                                                fontSize: "13px",
+                                                fontFamily: "inherit",
+                                            }}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={handlePromoCodeValidation}
+                                            disabled={validatingPromoCode || !formData.promoCode.trim()}
+                                            style={{
+                                                padding: "12px 16px",
+                                                backgroundColor: validatingPromoCode || !formData.promoCode.trim() ? "#9ca3af" : "var(--color-primary)",
+                                                color: "white",
+                                                border: "none",
+                                                borderRadius: "8px",
+                                                fontSize: "13px",
+                                                fontWeight: "600",
+                                                cursor: validatingPromoCode || !formData.promoCode.trim() ? "not-allowed" : "pointer",
+                                                whiteSpace: "nowrap",
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: "6px"
+                                            }}
+                                        >
+                                            {validatingPromoCode ? (
+                                                <>
+                                                    <CircularProgress size={14} sx={{ color: "white" }} />
+                                                    Validating...
+                                                </>
+                                            ) : (
+                                                "Apply"
+                                            )}
+                                        </button>
+                                    </div>
+                                    {promoCodeMessage && (
+                                        <div style={{
+                                            marginTop: "8px",
+                                            padding: "8px 12px",
+                                            backgroundColor: promoCodeMessage.includes("✅") ? "#f0f9ff" : "#fef2f2",
+                                            border: `1px solid ${promoCodeMessage.includes("✅") ? "#bfdbfe" : "#fecaca"}`,
+                                            borderRadius: "6px",
+                                            fontSize: "12px",
+                                            color: promoCodeMessage.includes("✅") ? "#1d4ed8" : "#dc2626"
+                                        }}>
+                                            {promoCodeMessage}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Final Amount Display */}
+                                {formData.totalAmount && (
+                                    <div style={{
+                                        background: "linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.05) 100%)",
+                                        border: "1px solid rgba(16, 185, 129, 0.2)",
+                                        borderRadius: "12px",
+                                        padding: "16px",
+                                        marginBottom: "20px"
+                                    }}>
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                                            <span style={{ fontSize: "13px", color: "#6b7280" }}>Subtotal:</span>
+                                            <span style={{ fontSize: "13px", fontWeight: "600" }}>LKR {parseFloat(formData.totalAmount).toFixed(2)}</span>
+                                        </div>
+                                        {formData.promoCodeDiscount > 0 && (
+                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                                                <span style={{ fontSize: "13px", color: "#6b7280" }}>Discount:</span>
+                                                <span style={{ fontSize: "13px", fontWeight: "600", color: "#10b981" }}>-LKR {formData.promoCodeDiscount.toFixed(2)}</span>
+                                            </div>
+                                        )}
+                                        <hr style={{ margin: "8px 0", border: "none", borderTop: "1px solid rgba(16, 185, 129, 0.2)" }} />
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                            <span style={{ fontSize: "15px", fontWeight: "700", color: "#10b981" }}>Final Amount:</span>
+                                            <span style={{ fontSize: "18px", fontWeight: "700", color: "#10b981" }}>LKR {formData.finalAmount.toFixed(2)}</span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <hr style={{ margin: "24px 0", border: "none", borderTop: "1px solid #e5e7eb" }} />
+
+                                <h3 style={{ marginTop: 20, marginBottom: 20 }}>
                                     Select Template
                                 </h3>
                                 <p
@@ -2142,15 +2564,23 @@ export default function ReportGeneration() {
                                 ) : (
                                     <button
                                         onClick={handleGenerate}
-                                        disabled={isLoading}
+                                        disabled={isLoading || savingReport}
                                         className="btn btn--success"
                                         style={{
-                                            opacity: isLoading ? 0.7 : 1,
+                                            opacity: (isLoading || savingReport) ? 0.7 : 1,
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "8px",
                                         }}
                                     >
-                                        {isLoading
-                                            ? "Generating..."
-                                            : "Generate"}
+                                        {(isLoading || savingReport) ? (
+                                            <>
+                                                <CircularProgress size={14} sx={{ color: "white" }} />
+                                                <span>Saving...</span>
+                                            </>
+                                        ) : (
+                                            "Generate & Save"
+                                        )}
                                     </button>
                                 )}
                             </div>
@@ -2273,11 +2703,9 @@ export default function ReportGeneration() {
                     </div>
                 )}
 
-                {/* ───────────── Report Preview Modal ───────────── */}
-                {reportModalOpen && generatedReport && (() => {
-                    // ── helpers ──────────────────────────────────────────
-                    const getImgSrc = (raw: any): string => {
-                        const s = typeof raw === 'string' ? raw : raw?.url ?? raw?.src ?? raw?.path ?? '';
+                {/* Report Preview Modal */}
+                {reportModalOpen && (() => {
+                    const getImgSrc = (s: string): string => {
                         if (!s) return '';
                         if (s.startsWith('data:')) return s;
                         if (s.length > 200 && /^[A-Za-z0-9+/]+=*$/.test(s)) return `data:image/jpeg;base64,${s}`;
@@ -2297,120 +2725,129 @@ export default function ReportGeneration() {
                         const raw = hotel.images ?? hotel.Images ?? hotel.image ?? hotel.Image ?? [];
                         return (Array.isArray(raw) ? raw : [raw]).map(getImgSrc).filter(Boolean);
                     };
-                    const totalPages = (generatedReport.templateDesign?.pages?.length ?? 1) + 1 + formData.dayCards.length;
+                    const totalPages = (generatedReport.templateDesign?.pages?.length ?? 1) + 3 + formData.dayCards.length;
 
-                    // ── shared HTML builder ───────────────────────────────
-                    const buildReportHTML = (bodyExtra = '') => {
-                        const content = document.getElementById('report-print-content');
-                        if (!content) return '';
-                        return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8"/>
-<title>Travel Report – ${formData.customerName}</title>
-<style>
-  *, *::before, *::after { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; background: #fff; font-family: 'Segoe UI', Arial, sans-serif; }
-  @page { size: 700px 991px; margin: 0; }
-  @media print {
-    html, body { background: white !important; }
-    @page { size: 700px 991px; margin: 0; }
-    body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-    .rpt-page-wrap { page-break-after: always !important; break-after: page !important;
-      margin-bottom: 0 !important; height: 991px !important; overflow: hidden !important;
-      display: block !important; }
-    .rpt-page-label { display: none !important; }
-    #rpt-canvas { padding: 0 !important; gap: 0 !important; }
-    img { max-width: 100% !important; display: block !important; }
-  }
-  .rpt-page-label { text-align: center; color: rgba(80,80,80,0.5); font-size: 11px;
-    margin-bottom: 10px; letter-spacing: 0.06em; font-family: sans-serif; }
-  .rpt-page-wrap { margin-bottom: 48px; flex-shrink: 0; }
-  #rpt-canvas { padding: 44px 24px 60px; display: flex; flex-direction: column; align-items: center; gap: 0; }
-  .rpt-img-grid { display: grid; }
-  .rpt-img-grid img { width: 100%; height: 70px; object-fit: cover; display: block; }
-  .rpt-hero-img { position: absolute; top: 0; height: 100%; object-fit: cover; filter: brightness(0.45); display: block; }
-</style>
-</head>
-<body>
-<div id="rpt-canvas">${content.innerHTML}</div>
-${bodyExtra}
-</body>
-</html>`;
-                    };
+                    // ── save report to database ───────────────────────────
+                    const handleSaveReport = async () => {
+                        setSavingReport(true);
+                        try {
+                            const token = sessionStorage.getItem('dd_token');
+                            const tenantId = sessionStorage.getItem('dd_tenant_id');
+                            if (!token) {
+                                showError('Authentication required. Please log in.');
+                                return;
+                            }
 
-                    // ── shared filename helper ────────────────────────────
-                    const reportFilename = (() => {
-                        const name = formData.customerName.trim().replace(/\s+/g, '_') || 'TravelReport';
-                        const digits = (formData.mobileNo ?? '').replace(/\D/g, '');
-                        const last4 = digits.length > 0 ? digits.slice(-4).padStart(4, '0') : '0000';
-                        return `${name}_${last4}`;
-                    })();
+                            const completeReport = {
+                                version: "1.0",
+                                metadata: {
+                                    customerName: formData.customerName,
+                                    customerEmail: formData.email,
+                                    country: formData.country,
+                                    mobileNo: formData.mobileNo,
+                                    transportationMode: formData.transportationMode,
+                                    numberOfPassengers: formData.numberOfPassengers,
+                                    daysAndNights: formData.daysAndNights,
+                                    selectedRoutes: formData.selectedRoutes,
+                                    createdAt: new Date().toISOString(),
+                                },
+                                cost: {
+                                    totalAmount: parseFloat(formData.totalAmount) || 0,
+                                    promoCode: formData.promoCode,
+                                    promoCodeDiscount: formData.promoCodeDiscount,
+                                    finalAmount: formData.finalAmount,
+                                },
+                                policies: {
+                                    specialRemark: formData.specialRemark,
+                                    bookingPolicy: formData.bookingPolicy,
+                                    cancellationPolicy: formData.cancellationPolicy,
+                                },
+                                template: {
+                                    id: generatedReport.template.id ?? generatedReport.template.templateId,
+                                    name: generatedReport.template.templateName ?? generatedReport.template.name,
+                                    thumbnail: generatedReport.template.templateThumbnail,
+                                },
+                                templateDesign: generatedReport.templateDesign,
+                                pages: [
+                                    // Template cover pages
+                                    ...(generatedReport.templateDesign?.pages || []).map((page: any, idx: number) => ({
+                                        type: 'template',
+                                        pageNumber: idx + 1,
+                                        content: page,
+                                    })),
+                                    // Customer info page
+                                    {
+                                        type: 'customerInfo',
+                                        pageNumber: (generatedReport.templateDesign?.pages?.length ?? 1) + 1,
+                                        content: {
+                                            customerName: formData.customerName,
+                                            country: formData.country,
+                                            mobileNo: formData.mobileNo,
+                                            email: formData.email,
+                                            transportationMode: formData.transportationMode,
+                                            numberOfPassengers: formData.numberOfPassengers,
+                                            daysAndNights: formData.daysAndNights,
+                                            selectedRoutes: formData.selectedRoutes,
+                                        },
+                                    },
+                                    // Day pages
+                                    ...formData.dayCards.map((dayCard, dayIdx) => ({
+                                        type: 'dayDetail',
+                                        pageNumber: (generatedReport.templateDesign?.pages?.length ?? 1) + 2 + dayIdx,
+                                        dayNumber: dayIdx + 1,
+                                        content: {
+                                            selectedDay: dayCard.selectedDay,
+                                            visitingPlaces: dayCard.visitingPlaces,
+                                            selectedPlaces: dayCard.selectedPlaces,
+                                            selectedHotels: dayCard.selectedHotels,
+                                            remarks: dayCard.remarks,
+                                            description: generatedDescriptions[dayCard.id] || '',
+                                        },
+                                    })),
+                                    // Cost page
+                                    {
+                                        type: 'cost',
+                                        pageNumber: (generatedReport.templateDesign?.pages?.length ?? 1) + 2 + formData.dayCards.length,
+                                        content: {
+                                            totalAmount: parseFloat(formData.totalAmount) || 0,
+                                            promoCode: formData.promoCode,
+                                            promoCodeDiscount: formData.promoCodeDiscount,
+                                            finalAmount: formData.finalAmount,
+                                        },
+                                    },
+                                    // Policies page
+                                    {
+                                        type: 'policies',
+                                        pageNumber: (generatedReport.templateDesign?.pages?.length ?? 1) + 3 + formData.dayCards.length,
+                                        content: {
+                                            specialRemark: formData.specialRemark,
+                                            bookingPolicy: formData.bookingPolicy,
+                                            cancellationPolicy: formData.cancellationPolicy,
+                                        },
+                                    },
+                                ],
+                                totalPages: (generatedReport.templateDesign?.pages?.length ?? 1) + 3 + formData.dayCards.length,
+                            };
 
-                    // ── export as PDF (print dialog) ──────────────────────
-                    const handleExportPDF = () => {
-                        setExportMenuOpen(false);
-                        const content = document.getElementById('report-print-content');
-                        if (!content) return;
-                        const printWin = window.open('', '_blank');
-                        if (!printWin) { alert('Pop-ups are blocked. Please allow pop-ups for this site.'); return; }
+                            const reportPayload = {
+                                tenantId: tenantId!,
+                                customerName: formData.customerName,
+                                customerEmail: formData.email,
+                                generatedReport: JSON.stringify(completeReport),
+                            };
 
-                        const scriptTag = '<' + 'script>' +
-                            'var imgs=Array.from(document.images),total=imgs.length,loaded=0;' +
-                            'function tryPrint(){setTimeout(function(){window.focus();window.print();},600);}' +
-                            'if(total===0){tryPrint();}' +
-                            'else{imgs.forEach(function(img){' +
-                            '  if(img.complete){if(++loaded>=total)tryPrint();}' +
-                            '  else{img.onload=img.onerror=function(){if(++loaded>=total)tryPrint();};}' +
-                            '});}' +
-                            '</' + 'script>';
-
-                        const css = [
-                            '*, *::before, *::after { box-sizing: border-box; }',
-                            'html, body { margin: 0; padding: 0; background: #fff; }',
-                            '@page { size: 700px 991px; margin: 0; }',
-                            '@media print {',
-                            '  @page { size: 700px 991px; margin: 0; }',
-                            '  body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
-                            '  .rpt-page-label { display: none !important; }',
-                            '  .rpt-page-wrap { page-break-after: always !important; break-after: page !important;',
-                            '    height: 991px !important; overflow: hidden !important;',
-                            '    margin: 0 !important; padding: 0 !important; display: block !important; }',
-                            '  #rpt-canvas { padding: 0 !important; gap: 0 !important; background: white !important; }',
-                            '  img { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }',
-                            '}',
-                            '.rpt-page-wrap { margin-bottom: 48px; }',
-                            '#rpt-canvas { padding: 44px 24px 60px; display: flex; flex-direction: column; align-items: center; gap: 0; }',
-                            '.rpt-img-grid { display: grid; }',
-                            '.rpt-hero-img { position: absolute; top: 0; height: 100%; object-fit: cover; filter: brightness(0.45); display: block; }',
-                        ].join('\n');
-
-                        printWin.document.write(
-                            '<!DOCTYPE html><html><head><meta charset="utf-8"/>' +
-                            '<title>' + reportFilename + '</title>' +
-                            '<style>' + css + '</style>' +
-                            '</head><body>' +
-                            '<div id="rpt-canvas">' + content.innerHTML + '</div>' +
-                            scriptTag +
-                            '</body></html>'
-                        );
-                        printWin.document.close();
-                    };
-
-                    // ── export as HTML ────────────────────────────────────
-                    const handleExportHTML = () => {
-                        setExportMenuOpen(false);
-                        const html = buildReportHTML();
-                        if (!html) return;
-                        const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `${reportFilename}.html`;
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                        URL.revokeObjectURL(url);
+                            await generateReport(reportPayload, token);
+                            showSuccess('Report saved successfully!');
+                            setTimeout(() => {
+                                setReportModalOpen(false);
+                                navigate('/report-history');
+                            }, 1500);
+                        } catch (error: any) {
+                            console.error('Error saving report:', error);
+                            showError(error?.response?.data?.message || 'Failed to save report. Please try again.');
+                        } finally {
+                            setSavingReport(false);
+                        }
                     };
 
                     // ── shared page shell ─────────────────────────────────
@@ -2466,108 +2903,40 @@ ${bodyExtra}
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                    {/* ── Export split button ── */}
-                                    <div style={{ position: 'relative' }}>
-                                        {/* main + chevron row */}
-                                        <div style={{
-                                            display: 'flex', borderRadius: '8px', overflow: 'visible',
-                                            boxShadow: '0 4px 14px rgba(255,123,46,0.35)',
-                                        }}>
-                                            {/* main action — Export PDF */}
-                                            <button
-                                                onClick={handleExportPDF}
-                                                style={{
-                                                    background: 'linear-gradient(135deg, #FF7B2E 0%, #F0A94D 100%)',
-                                                    border: 'none', borderRadius: '8px 0 0 8px',
-                                                    color: 'white', padding: '7px 16px',
-                                                    cursor: 'pointer',
-                                                    fontSize: '13px', fontWeight: 700,
-                                                    display: 'flex', alignItems: 'center', gap: '6px',
-                                                    transition: 'opacity 0.15s',
-                                                }}
-                                                onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; }}
-                                                onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
-                                            >
-                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                                                    <polyline points="7 10 12 15 17 10" />
-                                                    <line x1="12" y1="15" x2="12" y2="3" />
+                                    {/* ── Save Report button ── */}
+                                    <button
+                                        onClick={handleSaveReport}
+                                        disabled={savingReport}
+                                        style={{
+                                            background: savingReport ? 'linear-gradient(135deg, #9ca3af 0%, #6b7280 100%)' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                                            border: 'none',
+                                            color: 'white', borderRadius: '8px', padding: '7px 20px',
+                                            cursor: savingReport ? 'not-allowed' : 'pointer',
+                                            fontSize: '13px', fontWeight: 700,
+                                            display: 'flex', alignItems: 'center', gap: '8px',
+                                            boxShadow: '0 4px 14px rgba(16,185,129,0.35)',
+                                            transition: 'all 0.15s',
+                                            opacity: savingReport ? 0.7 : 1,
+                                        }}
+                                        onMouseEnter={e => { if (!savingReport) { e.currentTarget.style.opacity = '0.88'; e.currentTarget.style.transform = 'translateY(-1px)'; } }}
+                                        onMouseLeave={e => { if (!savingReport) { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'translateY(0)'; } }}
+                                    >
+                                        {savingReport ? (
+                                            <>
+                                                <CircularProgress size={13} style={{ color: 'white' }} />
+                                                <span>Saving...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                                                    <polyline points="17 21 17 13 7 13 7 21"/>
+                                                    <polyline points="7 3 7 8 15 8"/>
                                                 </svg>
-                                                Export PDF
-                                            </button>
-                                            {/* divider */}
-                                            <div style={{ width: '1px', background: 'rgba(255,255,255,0.3)', flexShrink: 0, alignSelf: 'stretch' }} />
-                                            {/* chevron toggle */}
-                                            <button
-                                                onClick={() => setExportMenuOpen(o => !o)}
-                                                style={{
-                                                    background: 'linear-gradient(135deg, #F0A94D 0%, #FF7B2E 100%)',
-                                                    border: 'none', borderRadius: '0 8px 8px 0',
-                                                    color: 'white', padding: '7px 9px',
-                                                    cursor: 'pointer', display: 'flex', alignItems: 'center',
-                                                    transition: 'opacity 0.15s',
-                                                }}
-                                                onMouseEnter={e => { e.currentTarget.style.opacity = '0.88'; }}
-                                                onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
-                                            >
-                                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"
-                                                    style={{ transform: exportMenuOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.18s' }}>
-                                                    <polyline points="6 9 12 15 18 9" />
-                                                </svg>
-                                            </button>
-                                        </div>
-                                        {/* dropdown menu */}
-                                        {exportMenuOpen && (
-                                            <div style={{
-                                                position: 'absolute', top: 'calc(100% + 6px)', right: 0,
-                                                background: '#1e1e2e', border: '1px solid rgba(255,255,255,0.1)',
-                                                borderRadius: '10px', overflow: 'hidden',
-                                                boxShadow: '0 12px 32px rgba(0,0,0,0.5)',
-                                                minWidth: '170px', zIndex: 100,
-                                            }}>
-                                                {/* PDF option */}
-                                                <button
-                                                    onClick={handleExportPDF}
-                                                    style={{
-                                                        width: '100%', background: 'none', border: 'none',
-                                                        color: 'rgba(255,255,255,0.88)', padding: '10px 16px',
-                                                        cursor: 'pointer', fontSize: '13px', fontWeight: 600,
-                                                        display: 'flex', alignItems: 'center', gap: '10px',
-                                                        textAlign: 'left', transition: 'background 0.12s',
-                                                    }}
-                                                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,123,46,0.15)'; }}
-                                                    onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
-                                                >
-                                                    <span style={{ fontSize: '16px' }}>📄</span>
-                                                    <div>
-                                                        <div>Export as PDF</div>
-                                                        <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', fontWeight: 400 }}>Print / save via browser</div>
-                                                    </div>
-                                                </button>
-                                                {/* divider */}
-                                                <div style={{ height: '1px', background: 'rgba(255,255,255,0.07)', margin: '0 8px' }} />
-                                                {/* HTML option */}
-                                                <button
-                                                    onClick={handleExportHTML}
-                                                    style={{
-                                                        width: '100%', background: 'none', border: 'none',
-                                                        color: 'rgba(255,255,255,0.88)', padding: '10px 16px',
-                                                        cursor: 'pointer', fontSize: '13px', fontWeight: 600,
-                                                        display: 'flex', alignItems: 'center', gap: '10px',
-                                                        textAlign: 'left', transition: 'background 0.12s',
-                                                    }}
-                                                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(99,179,237,0.15)'; }}
-                                                    onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
-                                                >
-                                                    <span style={{ fontSize: '16px' }}>🌐</span>
-                                                    <div>
-                                                        <div>Export as HTML</div>
-                                                        <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', fontWeight: 400 }}>Download .html file</div>
-                                                    </div>
-                                                </button>
-                                            </div>
+                                                <span>Save Report</span>
+                                            </>
                                         )}
-                                    </div>
+                                    </button>
                                     <button
                                         onClick={() => setReportModalOpen(false)}
                                         style={{
@@ -2638,7 +3007,8 @@ ${bodyExtra}
                                         { icon: '👤', label: 'Full Name', value: formData.customerName },
                                         { icon: '🌍', label: 'Country', value: formData.country },
                                         { icon: '📱', label: 'Mobile', value: formData.mobileNo },
-                                        { icon: '🗓️', label: 'Duration', value: formData.daysAndNights },
+                                        { icon: '�', label: 'Email', value: formData.email },
+                                        { icon: '�🗓️', label: 'Duration', value: formData.daysAndNights },
                                         { icon: '👥', label: 'Passengers', value: formData.numberOfPassengers },
                                         ...(formData.transportationMode ? [{ icon: '🚌', label: 'Transport', value: formData.transportationMode }] : []),
                                     ];
@@ -2989,6 +3359,207 @@ ${bodyExtra}
                                         </div>
                                     );
                                 })}
+
+                                {/* ════ Cost Summary Page ════ */}
+                                {(() => {
+                                    const costPageNum = (generatedReport.templateDesign?.pages?.length ?? 1) + 2 + formData.dayCards.length;
+                                    return (
+                                        <div className="rpt-page-wrap" style={{ flexShrink: 0, marginBottom: '48px' }}>
+                                            <div className="rpt-page-label" style={{ textAlign: 'center', color: 'rgba(255,255,255,0.25)', fontSize: '11px', marginBottom: '10px', letterSpacing: '0.06em' }}>
+                                                PAGE {costPageNum} · COST SUMMARY
+                                            </div>
+                                            <PageShell>
+                                                {/* Hero Section */}
+                                                <div style={{
+                                                    height: '120px', flexShrink: 0, position: 'relative', overflow: 'hidden',
+                                                    background: 'linear-gradient(135deg, #0f766e 0%, #0d9488 25%, #14b8a6 75%, #5eead4 100%)',
+                                                }}>
+                                                    <div style={{ position: 'absolute', top: '-30px', right: '-30px', width: '120px', height: '120px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)' }} />
+                                                    <div style={{ position: 'absolute', bottom: '-20px', left: '-20px', width: '80px', height: '80px', borderRadius: '50%', background: 'rgba(255,255,255,0.08)' }} />
+                                                    <div style={{ position: 'absolute', top: '24px', left: '36px', right: '36px' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                                                            <div style={{
+                                                                width: '40px', height: '40px', borderRadius: '50%',
+                                                                background: 'rgba(255,255,255,0.15)', display: 'flex',
+                                                                alignItems: 'center', justifyContent: 'center', fontSize: '18px'
+                                                            }}>💰</div>
+                                                            <div>
+                                                                <div style={{ color: 'white', fontSize: '18px', fontWeight: 700, lineHeight: 1 }}>Cost Summary</div>
+                                                                <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '11px', marginTop: '2px' }}>
+                                                                    Package pricing & discounts
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Content */}
+                                                <div style={{ padding: '32px 48px', flex: 1, background: '#fafafa' }}>
+                                                    {/* Cost Breakdown Card */}
+                                                    <div style={{
+                                                        background: 'white', borderRadius: '16px', padding: '28px',
+                                                        boxShadow: '0 8px 32px rgba(0,0,0,0.08)', border: '1px solid #f1f5f9',
+                                                        marginBottom: '24px'
+                                                    }}>
+                                                        <div style={{ marginBottom: '20px' }}>
+                                                            <div style={{ fontSize: '14px', fontWeight: 700, color: '#1e293b', marginBottom: '16px' }}>Package Details</div>
+                                                        </div>
+
+                                                        {/* Subtotal */}
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+                                                            <span style={{ fontSize: '13px', color: '#64748b' }}>Tour Package Amount</span>
+                                                            <span style={{ fontSize: '14px', fontWeight: 600, color: '#1e293b' }}>LKR {(parseFloat(formData.totalAmount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                        </div>
+
+                                                        {/* Promo Code Discount */}
+                                                        {formData.promoCodeDiscount > 0 && (
+                                                            <>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #f1f5f9' }}>
+                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                                        <span style={{ fontSize: '13px', color: '#64748b' }}>Promo Code Discount</span>
+                                                                        {formData.promoCode && (
+                                                                            <span style={{
+                                                                                fontSize: '10px', padding: '2px 6px', borderRadius: '4px',
+                                                                                background: '#dcfce7', color: '#15803d', fontWeight: 600
+                                                                            }}>
+                                                                                {formData.promoCode}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <span style={{ fontSize: '14px', fontWeight: 600, color: '#dc2626' }}>-LKR {formData.promoCodeDiscount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                                </div>
+                                                            </>
+                                                        )}
+
+                                                        {/* Final Amount */}
+                                                        <div style={{
+                                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                            marginTop: '12px',
+                                                            background: 'linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%)',
+                                                            margin: '16px -28px -28px',
+                                                            padding: '20px 28px',
+                                                            borderBottomLeftRadius: '16px', borderBottomRightRadius: '16px'
+                                                        }}>
+                                                            <span style={{ fontSize: '16px', fontWeight: 700, color: '#15803d' }}>Total Amount</span>
+                                                            <span style={{ fontSize: '20px', fontWeight: 700, color: '#15803d' }}>
+                                                                LKR {formData.finalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Payment Terms */}
+                                                    <div style={{
+                                                        background: 'white', borderRadius: '12px', padding: '20px',
+                                                        boxShadow: '0 4px 16px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9'
+                                                    }}>
+                                                        <div style={{ fontSize: '13px', fontWeight: 600, color: '#1e293b', marginBottom: '12px' }}>💳 Payment Information</div>
+                                                        <div style={{ fontSize: '12px', color: '#64748b', lineHeight: 1.6 }}>
+                                                            • 40% advance payment required to confirm booking<br />
+                                                            • Balance 60% due 30 days before tour commencement<br />
+                                                            • All amounts are in Sri Lankan Rupees (LKR)
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Footer */}
+                                                <div style={{ padding: '12px 48px', borderTop: '1px solid #efefef', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, background: 'white' }}>
+                                                    <span style={{ fontSize: '10px', color: '#c0c0c0', fontWeight: 600, letterSpacing: '0.05em' }}>DYNODOCS · TRAVEL REPORT</span>
+                                                    <span style={{ fontSize: '10px', color: '#c0c0c0' }}>Cost Summary · Page {costPageNum} of {totalPages + 1}</span>
+                                                </div>
+                                            </PageShell>
+                                        </div>
+                                    );
+                                })()}
+
+                                {/* ════ Policies & Terms Page ════ */}
+                                {(() => {
+                                    const policiesPageNum = (generatedReport.templateDesign?.pages?.length ?? 1) + 3 + formData.dayCards.length;
+                                    return (
+                                        <div className="rpt-page-wrap" style={{ flexShrink: 0, marginBottom: '48px' }}>
+                                            <div className="rpt-page-label" style={{ textAlign: 'center', color: 'rgba(255,255,255,0.25)', fontSize: '11px', marginBottom: '10px', letterSpacing: '0.06em' }}>
+                                                PAGE {policiesPageNum} · POLICIES & TERMS
+                                            </div>
+                                            <PageShell>
+                                                {/* Hero Section */}
+                                                <div style={{
+                                                    height: '120px', flexShrink: 0, position: 'relative', overflow: 'hidden',
+                                                    background: 'linear-gradient(135deg, #7c2d12 0%, #dc2626 25%, #ef4444 75%, #fca5a5 100%)',
+                                                }}>
+                                                    <div style={{ position: 'absolute', top: '-30px', right: '-30px', width: '120px', height: '120px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)' }} />
+                                                    <div style={{ position: 'absolute', bottom: '-20px', left: '-20px', width: '80px', height: '80px', borderRadius: '50%', background: 'rgba(255,255,255,0.08)' }} />
+                                                    <div style={{ position: 'absolute', top: '24px', left: '36px', right: '36px' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+                                                            <div style={{
+                                                                width: '40px', height: '40px', borderRadius: '50%',
+                                                                background: 'rgba(255,255,255,0.15)', display: 'flex',
+                                                                alignItems: 'center', justifyContent: 'center', fontSize: '18px'
+                                                            }}>📋</div>
+                                                            <div>
+                                                                <div style={{ color: 'white', fontSize: '18px', fontWeight: 700, lineHeight: 1 }}>Terms & Policies</div>
+                                                                <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '11px', marginTop: '2px' }}>
+                                                                    Important information & conditions
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Content */}
+                                                <div style={{ padding: '32px 48px', flex: 1, background: '#fafafa' }}>
+                                                    {/* Special Remark */}
+                                                    <div style={{
+                                                        background: 'white', borderRadius: '12px', padding: '20px',
+                                                        boxShadow: '0 4px 16px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9',
+                                                        marginBottom: '20px'
+                                                    }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                                                            <div style={{ fontSize: '16px' }}>⚡</div>
+                                                            <div style={{ fontSize: '14px', fontWeight: 700, color: '#1e293b' }}>Important Notice</div>
+                                                        </div>
+                                                        <div style={{ fontSize: '12px', color: '#4b5563', lineHeight: 1.6, padding: '12px', background: '#fef3c7', borderRadius: '8px', border: '1px solid #fbbf24' }}>
+                                                            {formData.specialRemark}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Booking Policy */}
+                                                    <div style={{
+                                                        background: 'white', borderRadius: '12px', padding: '20px',
+                                                        boxShadow: '0 4px 16px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9',
+                                                        marginBottom: '20px'
+                                                    }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                                                            <div style={{ fontSize: '16px' }}>📅</div>
+                                                            <div style={{ fontSize: '14px', fontWeight: 700, color: '#1e293b' }}>Booking Policy</div>
+                                                        </div>
+                                                        <div style={{ fontSize: '12px', color: '#4b5563', lineHeight: 1.7 }}>
+                                                            {formData.bookingPolicy}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Cancellation Policy */}
+                                                    <div style={{
+                                                        background: 'white', borderRadius: '12px', padding: '20px',
+                                                        boxShadow: '0 4px 16px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9'
+                                                    }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                                                            <div style={{ fontSize: '16px' }}>❌</div>
+                                                            <div style={{ fontSize: '14px', fontWeight: 700, color: '#1e293b' }}>Cancellation Policy</div>
+                                                        </div>
+                                                        <div style={{ fontSize: '12px', color: '#4b5563', lineHeight: 1.7 }}>
+                                                            {formData.cancellationPolicy}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Footer */}
+                                                <div style={{ padding: '12px 48px', borderTop: '1px solid #efefef', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, background: 'white' }}>
+                                                    <span style={{ fontSize: '10px', color: '#c0c0c0', fontWeight: 600, letterSpacing: '0.05em' }}>DYNODOCS · TRAVEL REPORT</span>
+                                                    <span style={{ fontSize: '10px', color: '#c0c0c0' }}>Terms & Policies · Page {policiesPageNum} of {totalPages + 2}</span>
+                                                </div>
+                                            </PageShell>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         </div>
                     );
